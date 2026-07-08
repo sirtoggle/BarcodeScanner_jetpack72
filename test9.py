@@ -218,6 +218,7 @@ def blink_green_led(times=LED_BLINK_COUNT, on_time=LED_ON_SECONDS, off_time=LED_
             time.sleep(max(0.01, on_time))
             GPIO.output(GREEN_LED_PIN, GPIO.LOW)
             time.sleep(max(0.01, off_time))
+        GPIO.output(GREEN_LED_PIN, GPIO.LOW)
         print(f"LED blinked {max(1, times)} time(s) on GPIO {GREEN_LED_PIN}")
     except PermissionError as exc:
         print(f"LED blink failed due to permissions: {exc}")

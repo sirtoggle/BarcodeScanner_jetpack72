@@ -95,10 +95,19 @@ You can also set it permanently in your shell profile if you want.
 If the program does not start:
 - Check that the camera is connected.
 - Make sure the virtual environment is active.
-- Make sure the packages installed successfully.
-- Try installing them again:
+- Make sure you are using the same Python interpreter that installed the packages.
+- Verify OpenCV is available in that interpreter:
 
 ```bash
+which python
+python -c "import sys; print(sys.executable)"
+python -c "import cv2; print(cv2.__version__)"
+```
+
+If `cv2` is still missing, reinstall the packages with the same interpreter:
+
+```bash
+python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
 ```
 
