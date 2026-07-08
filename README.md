@@ -59,6 +59,15 @@ If the script is not available, install the packages directly:
 python -m pip install -r requirements.txt
 ```
 
+If the LED is important, install the Jetson GPIO package in the same environment:
+
+```bash
+sudo apt update
+sudo apt install -y python3-dev python3-pip
+sudo apt install -y libgpiod-dev
+python -m pip install Jetson.GPIO
+```
+
 ## 5. Start the ID scanner
 Run the program:
 
