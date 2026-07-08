@@ -52,6 +52,10 @@ CAMERA_FLIP_METHOD = int(os.getenv("CAMERA_FLIP_METHOD", "0"))
 # OCR cadence can be adjusted without editing code.
 OCR_INTERVAL_SECONDS = float(os.getenv("OCR_INTERVAL_SECONDS", "0.2"))
 
+# Set this to your mounted USB folder if you want files written there directly.
+# Example on Jetson: /media/admin/USB_DRIVE
+OUTPUT_DIR = os.getenv("ID_SCANNER_OUTPUT_DIR", "").strip()
+
 GPIO_READY = False
 
 
@@ -76,44 +80,66 @@ def setup_led():
 def find_card(frame):
     frame_area = frame.shape[0] * frame.shape[1]
 
+    def evaluate_contours(contours, min_area_ratio=0.04):
+        best_box = None
+        best_area = 0
+
+        for c in contours:
+            area = cv2.contourArea(c)
+            if area < frame_area * min_area_ratio:
+                continue
+
+            peri = cv2.arcLength(c, True)
+            approx = cv2.approxPolyDP(c, 0.03 * peri, True)
+            if len(approx) not in (4, 5, 6):
+                continue
+
+            x, y, w, h = cv2.boundingRect(c)
+            aspect = w / float(h)
+            if aspect < 0.5 or aspect > 2.8:
+                continue
+
+            if area > best_area:
+                best_area = area
+                best_box = (x, y, w, h)
+
+        return best_box
+
     gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-    
-    # CLAHE for better light card detection
+
+    # CLAHE helps with uneven lighting.
     clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
     gray = clahe.apply(gray)
-    
     blur = cv2.GaussianBlur(gray, (5, 5), 0)
 
+    # Edge-based detection for cards with strong borders.
     edges = cv2.Canny(blur, 30, 100)
-
     kernel = np.ones((5, 5), np.uint8)
     closed = cv2.morphologyEx(edges, cv2.MORPH_CLOSE, kernel)
-
     contours, _ = cv2.findContours(closed, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    best_box = evaluate_contours(contours)
 
-    best_box = None
-    best_area = 0
+    if best_box is not None:
+        return best_box
 
-    for c in contours:
-        area = cv2.contourArea(c)
+    # Threshold-based detection for darker cards such as black cards.
+    _, thresh = cv2.threshold(blur, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
+    thresh = cv2.morphologyEx(thresh, cv2.MORPH_CLOSE, np.ones((7, 7), np.uint8))
+    contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    best_box = evaluate_contours(contours, min_area_ratio=0.03)
 
-        if area < frame_area * 0.07:
-            continue
+    if best_box is not None:
+        return best_box
 
-        peri = cv2.arcLength(c, True)
-        approx = cv2.approxPolyDP(c, 0.03 * peri, True)
-
-        x, y, w, h = cv2.boundingRect(c)
-
-        aspect = w / float(h)
-        if aspect < 0.5 or aspect > 2.8:
-            continue
-
-        if area > best_area:
-            best_area = area
-            best_box = (x, y, w, h)
-
-    return best_box
+    # Color-based detection for red cards.
+    hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+    mask1 = cv2.inRange(hsv, (0, 60, 40), (10, 255, 255))
+    mask2 = cv2.inRange(hsv, (160, 60, 40), (179, 255, 255))
+    red_mask = cv2.bitwise_or(mask1, mask2)
+    red_mask = cv2.medianBlur(red_mask, 5)
+    red_mask = cv2.morphologyEx(red_mask, cv2.MORPH_CLOSE, np.ones((7, 7), np.uint8))
+    contours, _ = cv2.findContours(red_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    return evaluate_contours(contours, min_area_ratio=0.02)
 
 
 # -----------------------------
@@ -144,16 +170,36 @@ def extract_id(results):
 def save_scan(id_number, timestamp):
     date_str = datetime.now().strftime("%m-%d-%Y")
     path = find_usb_path()
-    with open(os.path.join(path, f"scans{date_str}.csv"), "a", newline="") as f:
-        csv.writer(f).writerow([id_number, timestamp])
+    os.makedirs(path, exist_ok=True)
+    filename = os.path.join(path, f"scans{date_str}.csv")
 
-    print(f"✔ SAVED → {id_number} | {timestamp}")
+    try:
+        with open(filename, "a", newline="") as f:
+            csv.writer(f).writerow([id_number, timestamp])
+        print(f"✔ SAVED → {id_number} | {timestamp}")
+    except PermissionError as exc:
+        fallback_dir = os.path.join(os.getcwd(), "id_scanner_output")
+        os.makedirs(fallback_dir, exist_ok=True)
+        fallback_file = os.path.join(fallback_dir, f"scans{date_str}.csv")
+        with open(fallback_file, "a", newline="") as f:
+            csv.writer(f).writerow([id_number, timestamp])
+        print(f"⚠ Permission denied for {path}; used fallback path {fallback_dir}: {exc}")
+
 
 def save_image(roi, timestamp):
     path = find_usb_path()
+    os.makedirs(path, exist_ok=True)
     filename = os.path.join(path, f"{timestamp}.jpg")
-    cv2.imwrite(filename, roi)
-    print(f"📸 SAVED IMAGE → {filename}")
+
+    try:
+        cv2.imwrite(filename, roi)
+        print(f"📸 SAVED IMAGE → {filename}")
+    except Exception as exc:
+        fallback_dir = os.path.join(os.getcwd(), "id_scanner_output")
+        os.makedirs(fallback_dir, exist_ok=True)
+        fallback_file = os.path.join(fallback_dir, f"{timestamp}.jpg")
+        cv2.imwrite(fallback_file, roi)
+        print(f"⚠ Image save fallback used: {fallback_file} ({exc})")
 
 
 def blink_green_led(times=LED_BLINK_COUNT, on_time=LED_ON_SECONDS, off_time=LED_OFF_SECONDS):
@@ -169,16 +215,42 @@ def blink_green_led(times=LED_BLINK_COUNT, on_time=LED_ON_SECONDS, off_time=LED_
         time.sleep(max(0.01, off_time))
 
 def find_usb_path():
+    if OUTPUT_DIR:
+        try:
+            os.makedirs(OUTPUT_DIR, exist_ok=True)
+            test_file = os.path.join(OUTPUT_DIR, ".write_test")
+            with open(test_file, "a"):
+                pass
+            os.remove(test_file)
+            print(f"Using configured output directory: {OUTPUT_DIR}")
+            return OUTPUT_DIR
+        except Exception as exc:
+            print(f"Configured output directory is not writable: {OUTPUT_DIR} ({exc})")
+
+    candidates = []
 
     for base in ["/media", "/mnt", "/run/media"]:
         if not os.path.exists(base):
             continue
 
         for root, dirs, _ in os.walk(base):
-            if dirs:
-                candidate = os.path.join(root, dirs[0])
+            for name in dirs:
+                candidate = os.path.join(root, name)
                 if os.path.isdir(candidate):
-                    return candidate
+                    candidates.append(candidate)
+
+    candidates.extend([os.path.expanduser("~"), os.getcwd()])
+
+    for candidate in candidates:
+        try:
+            os.makedirs(candidate, exist_ok=True)
+            test_file = os.path.join(candidate, ".write_test")
+            with open(test_file, "a"):
+                pass
+            os.remove(test_file)
+            return candidate
+        except Exception:
+            continue
 
     fallback_dir = os.path.join(os.getcwd(), "id_scanner_output")
     os.makedirs(fallback_dir, exist_ok=True)

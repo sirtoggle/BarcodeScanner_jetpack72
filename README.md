@@ -68,6 +68,15 @@ python test9.py
 
 On first run it will download the model.
 
+If you want the files to go directly to a USB drive, set the output folder before running:
+
+```bash
+export ID_SCANNER_OUTPUT_DIR="/media/<your-user>/<your-usb-name>"
+python test9.py
+```
+
+You can also set it permanently in your shell profile if you want.
+
 ## 6. Use the ID scanner
 - Place a card or ID in front of the camera.
 - The program will try to detect and read it.
