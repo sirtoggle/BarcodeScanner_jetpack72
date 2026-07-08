@@ -38,6 +38,7 @@ GREEN_LED_PIN = int(os.getenv("GREEN_LED_PIN", "12"))
 LED_BLINK_COUNT = int(os.getenv("LED_BLINK_COUNT", "3"))
 LED_ON_SECONDS = float(os.getenv("LED_ON_SECONDS", "0.15"))
 LED_OFF_SECONDS = float(os.getenv("LED_OFF_SECONDS", "0.15"))
+LED_ENABLED = os.getenv("ENABLE_LED", "0").strip().lower() in {"1", "true", "yes", "on"}
 
 # Camera defaults tuned for Jetson Orin Nano with USB 4K cameras.
 CAMERA_SOURCE = os.getenv("CAMERA_SOURCE", "usb").strip().lower()
@@ -62,8 +63,14 @@ GPIO_READY = False
 def setup_led():
     global GPIO_READY
 
+    if not LED_ENABLED:
+        print("LED disabled; set ENABLE_LED=1 to enable GPIO output")
+        GPIO_READY = False
+        return
+
     if GPIO is None:
         print("Jetson.GPIO is not available; LED output disabled")
+        GPIO_READY = False
         return
 
     try:
@@ -209,7 +216,6 @@ def save_image(roi, timestamp):
 
 def blink_green_led(times=LED_BLINK_COUNT, on_time=LED_ON_SECONDS, off_time=LED_OFF_SECONDS):
     if not GPIO_READY:
-        print("LED blink requested but GPIO is not ready")
         return
 
     try:
@@ -219,11 +225,10 @@ def blink_green_led(times=LED_BLINK_COUNT, on_time=LED_ON_SECONDS, off_time=LED_
             GPIO.output(GREEN_LED_PIN, GPIO.LOW)
             time.sleep(max(0.01, off_time))
         GPIO.output(GREEN_LED_PIN, GPIO.LOW)
-        print(f"LED blinked {max(1, times)} time(s) on GPIO {GREEN_LED_PIN}")
-    except PermissionError as exc:
-        print(f"LED blink failed due to permissions: {exc}")
-    except Exception as exc:
-        print(f"LED blink failed: {exc}")
+    except PermissionError:
+        pass
+    except Exception:
+        pass
 
 def find_usb_path():
     if OUTPUT_DIR:
