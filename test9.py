@@ -34,11 +34,11 @@ cv2.setNumThreads(max(1, os.cpu_count() or 1))
 
 reader = easyocr.Reader(['en'], gpu=is_gpu_available())
 
-GREEN_LED_PIN = int(os.getenv("GREEN_LED_PIN", "12"))
+GREEN_LED_PIN = int(os.getenv("GREEN_LED_PIN", "9"))
 LED_BLINK_COUNT = int(os.getenv("LED_BLINK_COUNT", "3"))
 LED_ON_SECONDS = float(os.getenv("LED_ON_SECONDS", "0.15"))
 LED_OFF_SECONDS = float(os.getenv("LED_OFF_SECONDS", "0.15"))
-LED_ENABLED = os.getenv("ENABLE_LED", "0").strip().lower() in {"1", "true", "yes", "on"}
+LED_ENABLED = os.getenv("ENABLE_LED", "1").strip().lower() in {"1", "true", "yes", "on"}
 
 # Camera defaults tuned for Jetson Orin Nano with USB 4K cameras.
 CAMERA_SOURCE = os.getenv("CAMERA_SOURCE", "usb").strip().lower()
