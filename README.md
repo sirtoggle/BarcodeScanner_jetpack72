@@ -34,7 +34,18 @@ If the project is already on the Jetson, go to the folder instead:
 cd /path/to/BarcodeScanner_jetpack72
 ```
 
-## 3. Install the required packages
+## 3. Create a Python environment (recommended)
+It is a good idea to use a virtual environment so the packages stay isolated.
+
+```bash
+sudo apt update
+sudo apt install -y python3-pip python3-venv
+python3 -m venv ~/idscanner-env
+source ~/idscanner-env/bin/activate
+python -m pip install --upgrade pip
+```
+
+## 4. Install the required packages
 Run the setup script:
 
 ```bash
@@ -42,37 +53,45 @@ chmod +x install_requirements.sh
 ./install_requirements.sh
 ```
 
-This installs the packages listed in `requirements.txt`.
+If the script is not available, install the packages directly:
 
-## 4. Start the ID scanner
+```bash
+python -m pip install -r requirements.txt
+```
+
+## 5. Start the ID scanner
 Run the program:
 
 ```bash
-python3 test9.py
+python test9.py
 ```
 
-## 5. Use the ID scanner
+On first run it will download the model.
+
+## 6. Use the ID scanner
 - Place a card or ID in front of the camera.
 - The program will try to detect and read it.
 - Press `q` in the camera window to quit.
 
-## 6. If something goes wrong
+## 7. If something goes wrong
 If the program does not start:
 - Check that the camera is connected.
+- Make sure the virtual environment is active.
 - Make sure the packages installed successfully.
 - Try installing them again:
 
 ```bash
-python3 -m pip install -r requirements.txt
+python -m pip install -r requirements.txt
 ```
 
-## 7. Notes
+## 8. Notes
 - This setup is intended for a Jetson environment.
 - If PyTorch does not install correctly for your JetPack version, you may need to install it from NVIDIA’s Jetson packages separately.
 
-## 8. Helpful commands
+## 9. Helpful commands
 ```bash
 ls
 pwd
-python3 --version
+python --version
+source ~/idscanner-env/bin/activate
 ```

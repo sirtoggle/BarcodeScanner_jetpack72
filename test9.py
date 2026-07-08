@@ -224,6 +224,10 @@ def main():
 
     setup_led()
 
+    cv2.namedWindow("ID Scanner", cv2.WINDOW_NORMAL)
+    cv2.resizeWindow("ID Scanner", 960, 540)
+    cv2.moveWindow("ID Scanner", 0, 0)
+
     # Remember when each card ID was last saved so the same card is not scanned twice too quickly.
     scanned_ids = {}
 
@@ -253,6 +257,10 @@ def main():
             break
 
         display = frame.copy()
+
+        if display.shape[1] > 1280:
+            scale = 1280 / display.shape[1]
+            display = cv2.resize(display, None, fx=scale, fy=scale, interpolation=cv2.INTER_AREA)
 
         # Pause briefly after a successful scan so the user can remove the card.
 
