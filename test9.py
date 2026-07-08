@@ -180,7 +180,7 @@ def find_usb_path():
                 if os.path.isdir(candidate):
                     return candidate
 
-    fallback_dir = os.path.join(os.getcwd(), "scanner_output")
+    fallback_dir = os.path.join(os.getcwd(), "id_scanner_output")
     os.makedirs(fallback_dir, exist_ok=True)
     return fallback_dir
 
@@ -263,7 +263,7 @@ def main():
             if time.time() > pause_until:
                 paused = False
 
-            cv2.imshow("Scanner", display)
+            cv2.imshow("ID Scanner", display)
             if cv2.waitKey(1) & 0xFF == ord('q'):
                 break
             continue
@@ -358,7 +358,7 @@ def main():
         cv2.putText(display, f"Buffer: {recent_ids}", (10, 30),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 0), 2)
 
-        cv2.imshow("Scanner", display)
+        cv2.imshow("ID Scanner", display)
 
         if cv2.waitKey(1) & 0xFF == ord('q'):
             break
