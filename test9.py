@@ -63,12 +63,14 @@ def setup_led():
     global GPIO_READY
 
     if GPIO is None:
+        print("Jetson.GPIO is not available; LED output disabled")
         return
 
     try:
         GPIO.setmode(GPIO.BOARD)
         GPIO.setup(GREEN_LED_PIN, GPIO.OUT, initial=GPIO.LOW)
         GPIO_READY = True
+        print(f"LED configured on GPIO {GREEN_LED_PIN} (BOARD mode)")
     except Exception as exc:
         print(f"GPIO setup failed: {exc}")
         GPIO_READY = False
@@ -204,15 +206,18 @@ def save_image(roi, timestamp):
 
 def blink_green_led(times=LED_BLINK_COUNT, on_time=LED_ON_SECONDS, off_time=LED_OFF_SECONDS):
     if not GPIO_READY:
-        # If the board cannot control the LED, show a message instead.
-        print("LED blink requested (GPIO unavailable)")
+        print("LED blink requested but GPIO is not ready")
         return
 
-    for _ in range(max(1, times)):
-        GPIO.output(GREEN_LED_PIN, GPIO.HIGH)
-        time.sleep(max(0.01, on_time))
-        GPIO.output(GREEN_LED_PIN, GPIO.LOW)
-        time.sleep(max(0.01, off_time))
+    try:
+        for _ in range(max(1, times)):
+            GPIO.output(GREEN_LED_PIN, GPIO.HIGH)
+            time.sleep(max(0.01, on_time))
+            GPIO.output(GREEN_LED_PIN, GPIO.LOW)
+            time.sleep(max(0.01, off_time))
+        print(f"LED blinked {max(1, times)} time(s) on GPIO {GREEN_LED_PIN}")
+    except Exception as exc:
+        print(f"LED blink failed: {exc}")
 
 def find_usb_path():
     if OUTPUT_DIR:
