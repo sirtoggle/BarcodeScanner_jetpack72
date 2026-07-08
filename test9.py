@@ -71,6 +71,9 @@ def setup_led():
         GPIO.setup(GREEN_LED_PIN, GPIO.OUT, initial=GPIO.LOW)
         GPIO_READY = True
         print(f"LED configured on GPIO {GREEN_LED_PIN} (BOARD mode)")
+    except PermissionError as exc:
+        print(f"GPIO permission denied. Run as root or adjust permissions: {exc}")
+        GPIO_READY = False
     except Exception as exc:
         print(f"GPIO setup failed: {exc}")
         GPIO_READY = False
@@ -216,6 +219,8 @@ def blink_green_led(times=LED_BLINK_COUNT, on_time=LED_ON_SECONDS, off_time=LED_
             GPIO.output(GREEN_LED_PIN, GPIO.LOW)
             time.sleep(max(0.01, off_time))
         print(f"LED blinked {max(1, times)} time(s) on GPIO {GREEN_LED_PIN}")
+    except PermissionError as exc:
+        print(f"LED blink failed due to permissions: {exc}")
     except Exception as exc:
         print(f"LED blink failed: {exc}")
 
