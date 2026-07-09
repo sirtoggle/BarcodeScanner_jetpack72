@@ -1,8 +1,6 @@
 from __future__ import annotations
 
 import os
-import subprocess
-import sys
 import cv2
 import numpy as np
 import easyocr
@@ -10,7 +8,7 @@ import csv
 import time
 import re
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, List, Optional, Tuple
 
 try:
     import torch
@@ -261,17 +259,6 @@ def configure_display_window() -> None:
         pass
 
 
-def launch_fullscreen_display() -> bool:
-    try:
-        if os.environ.get("DISPLAY"):
-            subprocess.Popen(["xset", "s", "off"])
-            subprocess.Popen(["xset", "-dpms"])
-            subprocess.Popen(["xset", "s", "noblank"])
-        return True
-    except Exception:
-        return False
-
-
 def create_camera_capture(camera_index: int = 0) -> cv2.VideoCapture:
     # On Jetson/Linux, V4L2 is the first thing to try for normal USB cameras.
     if CAMERA_SOURCE in ("auto", "usb"):
@@ -309,7 +296,6 @@ def main() -> None:
     if not cap.isOpened():
         raise RuntimeError("Unable to open camera. Check camera index and backend support.")
 
-    launch_fullscreen_display()
     configure_display_window()
 
     # CPU-side card detection and overlay rendering run here.
