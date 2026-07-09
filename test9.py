@@ -1,10 +1,17 @@
+import os
+
+os.environ.setdefault("QT_QPA_PLATFORM", "xcb")
+for font_dir in ["/usr/share/fonts/truetype", "/usr/share/fonts", "/usr/local/share/fonts"]:
+    if os.path.isdir(font_dir):
+        os.environ.setdefault("QT_QPA_FONTDIR", font_dir)
+        break
+
 import cv2
 import numpy as np
 import easyocr
 import csv
 import time
 import re
-import os
 from datetime import datetime
 
 try:
@@ -238,6 +245,25 @@ def draw_centered_overlay(frame, text, color=(255, 255, 255), bg_color=(0, 0, 0)
     cv2.putText(frame, text, (x, y), font, font_scale, color, thickness, cv2.LINE_AA)
 
 
+def configure_display_window():
+    cv2.namedWindow("ID Scanner", cv2.WINDOW_NORMAL)
+    cv2.moveWindow("ID Scanner", 0, 0)
+
+    try:
+        cv2.setWindowProperty("ID Scanner", cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
+    except Exception:
+        pass
+
+    try:
+        fullscreen_state = cv2.getWindowProperty("ID Scanner", cv2.WND_PROP_FULLSCREEN)
+        if fullscreen_state != cv2.WINDOW_FULLSCREEN:
+            cv2.resizeWindow("ID Scanner", 1920, 1080)
+            cv2.moveWindow("ID Scanner", 0, 0)
+    except Exception:
+        cv2.resizeWindow("ID Scanner", 1920, 1080)
+        cv2.moveWindow("ID Scanner", 0, 0)
+
+
 def create_camera_capture(camera_index=0):
     # On Jetson/Linux, V4L2 is the first thing to try for normal USB cameras.
     if CAMERA_SOURCE in ("auto", "usb"):
@@ -275,12 +301,7 @@ def main():
     if not cap.isOpened():
         raise RuntimeError("Unable to open camera. Check camera index and backend support.")
 
-    cv2.namedWindow("ID Scanner", cv2.WINDOW_NORMAL)
-    try:
-        cv2.setWindowProperty("ID Scanner", cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
-    except Exception:
-        cv2.resizeWindow("ID Scanner", 1920, 1080)
-    cv2.moveWindow("ID Scanner", 0, 0)
+    configure_display_window()
 
     # Remember when each card ID was last saved so the same card is not scanned twice too quickly.
     scanned_ids = {}
