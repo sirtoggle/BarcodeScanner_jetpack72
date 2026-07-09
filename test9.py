@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import os
+import subprocess
+import sys
 import cv2
 import numpy as np
 import easyocr
@@ -259,6 +261,17 @@ def configure_display_window() -> None:
         pass
 
 
+def launch_kiosk_mode() -> None:
+    try:
+        if os.environ.get("DISPLAY"):
+            subprocess.Popen(["xset", "s", "off"])
+            subprocess.Popen(["xset", "-dpms"])
+            subprocess.Popen(["xset", "s", "noblank"])
+            subprocess.Popen(["gsettings", "set", "org.gnome.desktop.session", "idle-delay", "0"])
+    except Exception:
+        pass
+
+
 def create_camera_capture(camera_index: int = 0) -> cv2.VideoCapture:
     # On Jetson/Linux, V4L2 is the first thing to try for normal USB cameras.
     if CAMERA_SOURCE in ("auto", "usb"):
@@ -296,6 +309,7 @@ def main() -> None:
     if not cap.isOpened():
         raise RuntimeError("Unable to open camera. Check camera index and backend support.")
 
+    launch_kiosk_mode()
     configure_display_window()
 
     # CPU-side card detection and overlay rendering run here.
