@@ -503,18 +503,6 @@ def main() -> None:
                     if count > last_confirmed_count and count <= 3:
                         displayed_countdown = 4 - count  # Convert: 1→3, 2→2, 3→1
                         last_confirmed_count = count
-                    
-                    # Display the countdown if it exists
-                    if displayed_countdown is not None:
-                        draw_centered_overlay(
-                            display,
-                            str(displayed_countdown),
-                            color=(0, 255, 0),
-                            bg_color=(0, 0, 0),
-                            font_scale=3.0,
-                            thickness=8,
-                            y_ratio=0.5,
-                        )
 
                     # The ID must be seen several times before we trust it.
 
@@ -577,6 +565,18 @@ def main() -> None:
                 font_scale=1.6,
                 thickness=5,
                 y_ratio=0.2,
+            )
+        
+        # Display countdown if one is active
+        if not paused and displayed_countdown is not None and card_lost_frames == 0:
+            draw_centered_overlay(
+                display,
+                str(displayed_countdown),
+                color=(0, 255, 0),
+                bg_color=(0, 0, 0),
+                font_scale=3.0,
+                thickness=8,
+                y_ratio=0.5,
             )
 
         cv2.imshow("ID Scanner", display)
