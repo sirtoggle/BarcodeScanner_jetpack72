@@ -254,11 +254,37 @@ def draw_centered_overlay(
 def configure_display_window() -> None:
     try:
         cv2.namedWindow("ID Scanner", cv2.WINDOW_NORMAL)
-        cv2.setWindowProperty("ID Scanner", cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
         cv2.resizeWindow("ID Scanner", 1920, 1080)
         cv2.moveWindow("ID Scanner", 0, 0)
     except Exception:
         pass
+
+
+def apply_fullscreen_window() -> None:
+    try:
+        cv2.setWindowProperty("ID Scanner", cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
+    except Exception:
+        pass
+
+    try:
+        cv2.resizeWindow("ID Scanner", 1920, 1080)
+        cv2.moveWindow("ID Scanner", 0, 0)
+    except Exception:
+        pass
+
+    for command in (
+        ["wmctrl", "-r", "ID Scanner", "-b", "add,fullscreen"],
+        ["wmctrl", "-r", "ID Scanner", "-e", "0,0,0,1920,1080"],
+        ["xdotool", "search", "--name", "ID Scanner", "windowactivate", "windowmove", "0", "0", "windowsize", "100%", "100%"],
+    ):
+        try:
+            subprocess.run(command, check=False, capture_output=True, text=True, timeout=3)
+        except FileNotFoundError:
+            continue
+        except subprocess.TimeoutExpired:
+            continue
+        except Exception:
+            continue
 
 
 def launch_kiosk_mode() -> None:
@@ -311,6 +337,8 @@ def main() -> None:
 
     launch_kiosk_mode()
     configure_display_window()
+    time.sleep(0.2)
+    apply_fullscreen_window()
 
     # CPU-side card detection and overlay rendering run here.
     # OCR uses the Jetson GPU path when PyTorch/CUDA is available.
@@ -351,6 +379,10 @@ def main() -> None:
             display = cv2.resize(display, None, fx=scale, fy=scale, interpolation=cv2.INTER_AREA)
 
         # Pause briefly after a successful scan so the user can remove the card.
+
+        if not paused and not getattr(main, "fullscreen_applied", False):
+            apply_fullscreen_window()
+            main.fullscreen_applied = True
 
         if paused:
             draw_centered_overlay(
