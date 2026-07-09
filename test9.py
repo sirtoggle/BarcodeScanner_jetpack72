@@ -1,10 +1,6 @@
 import os
 
-os.environ.setdefault("QT_QPA_PLATFORM", "xcb")
-for font_dir in ["/usr/share/fonts/truetype", "/usr/share/fonts", "/usr/local/share/fonts"]:
-    if os.path.isdir(font_dir):
-        os.environ.setdefault("QT_QPA_FONTDIR", font_dir)
-        break
+os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 import cv2
 import numpy as np
@@ -246,8 +242,10 @@ def draw_centered_overlay(frame, text, color=(255, 255, 255), bg_color=(0, 0, 0)
 
 
 def configure_display_window():
-    cv2.namedWindow("ID Scanner", cv2.WINDOW_NORMAL)
-    cv2.moveWindow("ID Scanner", 0, 0)
+    try:
+        cv2.namedWindow("ID Scanner", cv2.WINDOW_NORMAL)
+    except Exception:
+        cv2.namedWindow("ID Scanner", cv2.WINDOW_AUTOSIZE)
 
     try:
         cv2.setWindowProperty("ID Scanner", cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
@@ -255,13 +253,14 @@ def configure_display_window():
         pass
 
     try:
-        fullscreen_state = cv2.getWindowProperty("ID Scanner", cv2.WND_PROP_FULLSCREEN)
-        if fullscreen_state != cv2.WINDOW_FULLSCREEN:
-            cv2.resizeWindow("ID Scanner", 1920, 1080)
-            cv2.moveWindow("ID Scanner", 0, 0)
-    except Exception:
         cv2.resizeWindow("ID Scanner", 1920, 1080)
+    except Exception:
+        pass
+
+    try:
         cv2.moveWindow("ID Scanner", 0, 0)
+    except Exception:
+        pass
 
 
 def create_camera_capture(camera_index=0):
