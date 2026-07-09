@@ -3,6 +3,31 @@ from __future__ import annotations
 import os
 import subprocess
 import sys
+import importlib.util
+from pathlib import Path
+
+# OpenCV's Qt-based GUI helpers can emit a font warning on Linux/Jetson if the
+# expected font directory is missing. Create a compatible fallback before cv2 is imported.
+def configure_opencv_qt_font_path() -> None:
+    if os.name != "posix":
+        return
+
+    for candidate in ("/usr/share/fonts", "/usr/share/fonts/truetype", "/usr/share/fonts/opentype"):
+        if os.path.isdir(candidate):
+            os.environ.setdefault("QT_QPA_FONTDIR", candidate)
+            break
+
+    spec = importlib.util.find_spec("cv2")
+    if spec is None or not spec.origin:
+        return
+
+    cv2_package_dir = Path(spec.origin).resolve().parent
+    qt_font_dir = cv2_package_dir / "qt" / "fonts"
+    qt_font_dir.mkdir(parents=True, exist_ok=True)
+
+
+configure_opencv_qt_font_path()
+
 import cv2
 import numpy as np
 import easyocr
