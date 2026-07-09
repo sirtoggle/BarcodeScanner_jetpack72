@@ -418,6 +418,7 @@ def main() -> None:
     paused = False
     pause_until = 0
     ready_popup_until = time.time() + 2.0
+    show_scanner_ready = True  # Always show scanner ready when idle
     
     # Count how many frames in a row the card is missing.
     card_lost_frames = 0
@@ -454,7 +455,8 @@ def main() -> None:
 
             if time.time() > pause_until:
                 paused = False
-                ready_popup_until = time.time() + 2.0
+                displayed_countdown = None
+                last_confirmed_count = 0
 
             cv2.imshow("ID Scanner", display)
             if cv2.waitKey(1) & 0xFF == ord('q'):
@@ -556,7 +558,8 @@ def main() -> None:
                 displayed_countdown = None
                 last_confirmed_count = 0
 
-        if not paused and time.time() < ready_popup_until:
+        # Show "SCANNER READY" when idle (no card being scanned and not paused)
+        if not paused and (displayed_countdown is None or card_lost_frames > 0):
             draw_centered_overlay(
                 display,
                 "SCANNER READY",
