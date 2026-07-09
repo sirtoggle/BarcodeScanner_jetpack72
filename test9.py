@@ -494,6 +494,18 @@ def main() -> None:
                     candidate = max(counts, key=counts.get)
                     count = counts[candidate]
 
+                    # Display countdown showing progress toward required confirmations
+                    countdown_text = f"{count}/3"
+                    draw_centered_overlay(
+                        display,
+                        countdown_text,
+                        color=(0, 255, 0),
+                        bg_color=(0, 0, 0),
+                        font_scale=3.0,
+                        thickness=8,
+                        y_ratio=0.5,
+                    )
+
                     # The ID must be seen several times before we trust it.
 
                     if len(candidate) >= 6 and count >= 3:
