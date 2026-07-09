@@ -184,30 +184,43 @@ def find_usb_path():
         except Exception as exc:
             print(f"Configured output directory is not writable: {OUTPUT_DIR} ({exc})")
 
-    candidates = []
-
-    for base in ["/media", "/mnt", "/run/media"]:
-        if not os.path.exists(base):
-            continue
-
-        for root, dirs, _ in os.walk(base):
-            for name in dirs:
-                candidate = os.path.join(root, name)
-                if os.path.isdir(candidate):
-                    candidates.append(candidate)
-
-    candidates.extend([os.path.expanduser("~"), os.getcwd()])
-
-    for candidate in candidates:
+    def is_writable_dir(path):
         try:
-            os.makedirs(candidate, exist_ok=True)
-            test_file = os.path.join(candidate, ".write_test")
+            os.makedirs(path, exist_ok=True)
+            test_file = os.path.join(path, ".write_test")
             with open(test_file, "a"):
                 pass
             os.remove(test_file)
-            return candidate
+            return True
         except Exception:
+            return False
+
+    candidates = []
+
+    for base in ["/media", "/run/media", "/mnt"]:
+        if not os.path.exists(base):
             continue
+
+        for entry in os.listdir(base):
+            candidate = os.path.join(base, entry)
+            if not os.path.isdir(candidate):
+                continue
+            if os.path.realpath(candidate) in {os.path.realpath(os.path.expanduser("~")), os.path.realpath(os.getcwd())}:
+                continue
+            if is_writable_dir(candidate):
+                candidates.append(candidate)
+
+    if len(candidates) == 1:
+        selected = candidates[0]
+        print(f"Auto-selected USB output directory: {selected}")
+        return selected
+
+    if len(candidates) > 1:
+        # When several mount points are present, keep the first writable one.
+        # This still works well on a single-USB setup.
+        selected = candidates[0]
+        print(f"Multiple writable paths found; using first match: {selected}")
+        return selected
 
     fallback_dir = os.path.join(os.getcwd(), "id_scanner_output")
     os.makedirs(fallback_dir, exist_ok=True)
