@@ -254,24 +254,36 @@ def draw_centered_overlay(
 def configure_display_window() -> None:
     try:
         cv2.namedWindow("ID Scanner", cv2.WINDOW_NORMAL)
-        cv2.resizeWindow("ID Scanner", 1024, 600)
-        cv2.moveWindow("ID Scanner", 0, 0)
     except Exception:
         pass
 
 
 def apply_fullscreen_window() -> None:
+    # Preferred method: ask OpenCV to set the window fullscreen.
     try:
         cv2.setWindowProperty("ID Scanner", cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
+        return
     except Exception:
         pass
 
+    # Fallback: resize the window to the display size (works on Windows/Linux)
     try:
-        cv2.resizeWindow("ID Scanner", 1024, 600)
+        # Try to get the native screen size via tkinter (usually available).
+        import tkinter as tk
+
+        root = tk.Tk()
+        root.withdraw()
+        screen_w = root.winfo_screenwidth()
+        screen_h = root.winfo_screenheight()
+        root.destroy()
+
+        cv2.resizeWindow("ID Scanner", int(screen_w), int(screen_h))
         cv2.moveWindow("ID Scanner", 0, 0)
+        return
     except Exception:
         pass
 
+    # Last resort: try common X11/window utilities for Linux.
     for command in (
         ["wmctrl", "-r", "ID Scanner", "-b", "add,fullscreen"],
         ["wmctrl", "-r", "ID Scanner", "-e", "0,0,0,1024,600"],
