@@ -254,7 +254,7 @@ def draw_centered_overlay(
 def configure_display_window() -> None:
     try:
         cv2.namedWindow("ID Scanner", cv2.WINDOW_NORMAL)
-        cv2.resizeWindow("ID Scanner", 1920, 1080)
+        cv2.resizeWindow("ID Scanner", 1024, 600)
         cv2.moveWindow("ID Scanner", 0, 0)
     except Exception:
         pass
@@ -267,14 +267,14 @@ def apply_fullscreen_window() -> None:
         pass
 
     try:
-        cv2.resizeWindow("ID Scanner", 1920, 1080)
+        cv2.resizeWindow("ID Scanner", 1024, 600)
         cv2.moveWindow("ID Scanner", 0, 0)
     except Exception:
         pass
 
     for command in (
         ["wmctrl", "-r", "ID Scanner", "-b", "add,fullscreen"],
-        ["wmctrl", "-r", "ID Scanner", "-e", "0,0,0,1920,1080"],
+        ["wmctrl", "-r", "ID Scanner", "-e", "0,0,0,1024,600"],
         ["xdotool", "search", "--name", "ID Scanner", "windowactivate", "windowmove", "0", "0", "windowsize", "100%", "100%"],
     ):
         try:
