@@ -410,6 +410,10 @@ def main() -> None:
 
     last_ocr_time = 0
     ocr_interval = max(0.05, OCR_INTERVAL_SECONDS)
+    
+    # Countdown tracking variables
+    displayed_countdown = None
+    last_confirmed_count = 0
 
     paused = False
     pause_until = 0
@@ -494,17 +498,23 @@ def main() -> None:
                     candidate = max(counts, key=counts.get)
                     count = counts[candidate]
 
-                    # Display countdown showing progress toward required confirmations
-                    countdown_text = f"{count}/3"
-                    draw_centered_overlay(
-                        display,
-                        countdown_text,
-                        color=(0, 255, 0),
-                        bg_color=(0, 0, 0),
-                        font_scale=3.0,
-                        thickness=8,
-                        y_ratio=0.5,
-                    )
+                    # Update countdown display: count down from 3 to 1
+                    # Only update when count increases to show new number
+                    if count > last_confirmed_count and count <= 3:
+                        displayed_countdown = 4 - count  # Convert: 1→3, 2→2, 3→1
+                        last_confirmed_count = count
+                    
+                    # Display the countdown if it exists
+                    if displayed_countdown is not None:
+                        draw_centered_overlay(
+                            display,
+                            str(displayed_countdown),
+                            color=(0, 255, 0),
+                            bg_color=(0, 0, 0),
+                            font_scale=3.0,
+                            thickness=8,
+                            y_ratio=0.5,
+                        )
 
                     # The ID must be seen several times before we trust it.
 
@@ -540,6 +550,8 @@ def main() -> None:
                             recent_ids.clear()
                             stable_id = None
                             stable_start_time = None
+                            displayed_countdown = None
+                            last_confirmed_count = 0
 
                 last_ocr_time = time.time()
 
@@ -553,6 +565,8 @@ def main() -> None:
                 recent_ids.clear()
                 stable_id = None
                 stable_start_time = None
+                displayed_countdown = None
+                last_confirmed_count = 0
 
         if not paused and time.time() < ready_popup_until:
             draw_centered_overlay(
