@@ -1,6 +1,6 @@
 # ID Scanner Setup Guide
 
-This guide walks you through setting up the ID scanner project on a Jetson device.
+This guide walks you through setting up the ID scanner project on a Jetson Orin Nano with JetPack 7.2 and Ubuntu 24.04. The script is written for Python 3.12 and uses OpenCV for camera handling, with EasyOCR able to run on the Jetson GPU when a compatible PyTorch/CUDA runtime is installed.
 
 ## What you need
 - A Jetson device such as a Jetson Orin Nano
@@ -59,7 +59,13 @@ If the script is not available, install the packages directly:
 python -m pip install -r requirements.txt
 ```
 
-If the LED is important, install the Jetson GPIO package in the same environment:
+For GPU acceleration on Jetson, install a CUDA-enabled PyTorch build in the same environment:
+
+```bash
+pip3 install torch torchvision --index-url https://download.pytorch.org/whl/cu132
+```
+
+If you still need GPIO support for external hardware, install Jetson GPIO as well:
 
 ```bash
 sudo apt update
@@ -112,8 +118,9 @@ python -m pip install -r requirements.txt
 ```
 
 ## 8. Notes
-- This setup is intended for a Jetson environment.
-- If PyTorch does not install correctly for your JetPack version, you may need to install it from NVIDIA’s Jetson packages separately.
+- This setup is intended for a Jetson environment with JetPack 7.2 and Ubuntu 24.04.
+- If PyTorch does not install correctly for your JetPack version, install it from NVIDIA’s Jetson packages separately.
+- For system monitoring and performance checks, tools such as `jtop` can help verify GPU, CPU, and memory usage.
 
 ## 9. Helpful commands
 ```bash

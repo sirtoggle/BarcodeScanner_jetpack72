@@ -1,4 +1,8 @@
+from __future__ import annotations
+
 import os
+import subprocess
+import sys
 import cv2
 import numpy as np
 import easyocr
@@ -6,13 +10,14 @@ import csv
 import time
 import re
 from datetime import datetime
+from typing import Any, Dict, List, Optional, Tuple
 
 try:
     import torch
 except Exception:
     torch = None
 
-def is_gpu_available():
+def is_gpu_available() -> bool:
     return bool(torch is not None and torch.cuda.is_available())
 
 
@@ -47,7 +52,7 @@ OUTPUT_DIR = os.getenv("ID_SCANNER_OUTPUT_DIR", "").strip()
 # -----------------------------
 # CARD DETECTION (ROBUST)
 # -----------------------------
-def find_card(frame):
+def find_card(frame: np.ndarray) -> Optional[Tuple[int, int, int, int]]:
     frame_area = frame.shape[0] * frame.shape[1]
 
     def evaluate_contours(contours, min_area_ratio=0.04):
@@ -115,7 +120,7 @@ def find_card(frame):
 # -----------------------------
 # OCR ID EXTRACTION
 # -----------------------------
-def extract_id(results):
+def extract_id(results: List[Tuple[Any, str, Any]]) -> Optional[str]:
     text = " ".join([r[1] for r in results])
 
     numbers = re.findall(r"\d+", text)
@@ -137,7 +142,7 @@ def extract_id(results):
 # -----------------------------
 # SAVE FUNCTIONS
 # -----------------------------
-def save_scan(id_number, timestamp):
+def save_scan(id_number: str, timestamp: str) -> None:
     date_str = datetime.now().strftime("%m-%d-%Y")
     path = find_usb_path()
     os.makedirs(path, exist_ok=True)
@@ -156,7 +161,7 @@ def save_scan(id_number, timestamp):
         print(f"⚠ Permission denied for {path}; used fallback path {fallback_dir}: {exc}")
 
 
-def save_image(roi, timestamp):
+def save_image(roi: np.ndarray, timestamp: str) -> None:
     path = find_usb_path()
     os.makedirs(path, exist_ok=True)
     filename = os.path.join(path, f"{timestamp}.jpg")
@@ -171,7 +176,7 @@ def save_image(roi, timestamp):
         cv2.imwrite(fallback_file, roi)
         print(f"⚠ Image save fallback used: {fallback_file} ({exc})")
 
-def find_usb_path():
+def find_usb_path() -> str:
     if OUTPUT_DIR:
         try:
             os.makedirs(OUTPUT_DIR, exist_ok=True)
@@ -227,7 +232,15 @@ def find_usb_path():
     return fallback_dir
 
 
-def draw_centered_overlay(frame, text, color=(255, 255, 255), bg_color=(0, 0, 0), font_scale=1.6, thickness=4, y_ratio=0.5):
+def draw_centered_overlay(
+    frame: np.ndarray,
+    text: str,
+    color: Tuple[int, int, int] = (255, 255, 255),
+    bg_color: Tuple[int, int, int] = (0, 0, 0),
+    font_scale: float = 1.6,
+    thickness: int = 4,
+    y_ratio: float = 0.5,
+) -> None:
     h, w = frame.shape[:2]
     font = cv2.FONT_HERSHEY_SIMPLEX
     text_size, _ = cv2.getTextSize(text, font, font_scale, thickness)
@@ -238,7 +251,7 @@ def draw_centered_overlay(frame, text, color=(255, 255, 255), bg_color=(0, 0, 0)
     cv2.putText(frame, text, (x, y), font, font_scale, color, thickness, cv2.LINE_AA)
 
 
-def configure_display_window():
+def configure_display_window() -> None:
     try:
         cv2.namedWindow("ID Scanner", cv2.WINDOW_NORMAL)
         cv2.setWindowProperty("ID Scanner", cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
@@ -248,7 +261,18 @@ def configure_display_window():
         pass
 
 
-def create_camera_capture(camera_index=0):
+def launch_fullscreen_display() -> bool:
+    try:
+        if os.environ.get("DISPLAY"):
+            subprocess.Popen(["xset", "s", "off"])
+            subprocess.Popen(["xset", "-dpms"])
+            subprocess.Popen(["xset", "s", "noblank"])
+        return True
+    except Exception:
+        return False
+
+
+def create_camera_capture(camera_index: int = 0) -> cv2.VideoCapture:
     # On Jetson/Linux, V4L2 is the first thing to try for normal USB cameras.
     if CAMERA_SOURCE in ("auto", "usb"):
         cap = cv2.VideoCapture(camera_index, cv2.CAP_V4L2)
@@ -279,13 +303,17 @@ def create_camera_capture(camera_index=0):
 
     return cv2.VideoCapture(camera_index)
                         
-def main():
+def main() -> None:
     cap = create_camera_capture(CAMERA_INDEX)
 
     if not cap.isOpened():
         raise RuntimeError("Unable to open camera. Check camera index and backend support.")
 
+    launch_fullscreen_display()
     configure_display_window()
+
+    # CPU-side card detection and overlay rendering run here.
+    # OCR uses the Jetson GPU path when PyTorch/CUDA is available.
 
     # Remember when each card ID was last saved so the same card is not scanned twice too quickly.
     scanned_ids = {}
@@ -360,6 +388,7 @@ def main():
 
             if time.time() - last_ocr_time > ocr_interval:
 
+                # EasyOCR runs here; on Jetson this can use the GPU when the runtime is configured for it.
                 results = reader.readtext(roi)
                 id_number = extract_id(results)
 
