@@ -59,10 +59,26 @@ If the script is not available, install the packages directly:
 python -m pip install -r requirements.txt
 ```
 
-For GPU acceleration on Jetson, install a CUDA-enabled PyTorch build in the same environment:
+For true GPU acceleration on Jetson Orin, use a JetPack-compatible PyTorch runtime rather than a generic CUDA wheel. The most reliable approach is to run the project inside NVIDIA's Jetson container stack:
 
 ```bash
-pip3 install torch torchvision --index-url https://download.pytorch.org/whl/cu132
+sudo apt update
+sudo apt install -y docker.io
+sudo usermod -aG docker $USER
+sudo systemctl enable docker
+sudo systemctl start docker
+
+git clone https://github.com/dusty-nv/jetson-containers
+bash jetson-containers/install.sh
+jetson-containers run $(autotag l4t-pytorch)
+```
+
+Inside that container, install the project requirements and start the scanner:
+
+```bash
+cd /workspace/BarcodeScanner_jetpack72
+python3 -m pip install -r requirements.txt
+python3 test9.py
 ```
 
 If you still need GPIO support for external hardware, install Jetson GPIO as well:

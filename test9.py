@@ -4,6 +4,7 @@ import os
 import subprocess
 import sys
 import importlib.util
+import warnings
 from pathlib import Path
 
 # OpenCV's Qt-based GUI helpers can emit a font warning on Linux/Jetson if the
@@ -42,8 +43,27 @@ try:
 except Exception:
     torch = None
 
-def is_gpu_available() -> bool:
-    return bool(torch is not None and torch.cuda.is_available())
+def is_gpu_available(torch_module: Optional[Any] = None) -> bool:
+    if torch_module is None:
+        torch_module = torch
+
+    if torch_module is None:
+        return False
+
+    cuda_module = getattr(torch_module, "cuda", None)
+    if cuda_module is None:
+        return False
+
+    try:
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore",
+                message=r"Found CPU0 Orin.*compute capability.*",
+                category=UserWarning,
+            )
+            return bool(cuda_module.is_available())
+    except Exception:
+        return False
 
 
 if is_gpu_available():
@@ -56,6 +76,13 @@ cv2.setNumThreads(max(1, os.cpu_count() or 1))
 
 
 reader = easyocr.Reader(['en'], gpu=is_gpu_available())
+
+if torch is not None and is_gpu_available():
+    print("✅ PyTorch GPU acceleration is available.")
+elif torch is not None:
+    print("⚠ PyTorch CUDA is unavailable. For true GPU acceleration on Jetson Orin, use a JetPack-compatible PyTorch runtime such as the NVIDIA jetson-containers image.")
+else:
+    print("⚠ torch is not installed. EasyOCR will run in CPU mode.")
 
 # Camera defaults tuned for Jetson Orin Nano with USB 4K cameras.
 CAMERA_SOURCE = os.getenv("CAMERA_SOURCE", "usb").strip().lower()
