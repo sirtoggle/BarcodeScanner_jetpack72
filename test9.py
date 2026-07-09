@@ -189,7 +189,7 @@ def find_usb_path() -> str:
         except Exception as exc:
             print(f"Configured output directory is not writable: {OUTPUT_DIR} ({exc})")
 
-    def is_writable_dir(path):
+    def is_writable_dir(path: str) -> bool:
         try:
             os.makedirs(path, exist_ok=True)
             test_file = os.path.join(path, ".write_test")
@@ -200,31 +200,47 @@ def find_usb_path() -> str:
         except Exception:
             return False
 
-    candidates = []
+    def looks_like_usb_path(path: str) -> bool:
+        name = os.path.basename(os.path.normpath(path)).lower()
+        return any(token in name for token in ("usb", "drive", "flash", "sd", "removable", "disk"))
+
+    excluded_paths = {
+        os.path.realpath(os.path.expanduser("~")),
+        os.path.realpath(os.getcwd()),
+    }
+
+    candidates: List[str] = []
 
     for base in ["/media", "/run/media", "/mnt"]:
         if not os.path.exists(base):
             continue
 
-        for entry in os.listdir(base):
-            candidate = os.path.join(base, entry)
-            if not os.path.isdir(candidate):
+        for root, dirs, _ in os.walk(base):
+            real_root = os.path.realpath(root)
+            if real_root in excluded_paths:
+                dirs[:] = []
                 continue
-            if os.path.realpath(candidate) in {os.path.realpath(os.path.expanduser("~")), os.path.realpath(os.getcwd())}:
-                continue
-            if is_writable_dir(candidate):
-                candidates.append(candidate)
 
-    if len(candidates) == 1:
-        selected = candidates[0]
+            if real_root != os.path.realpath(base) and is_writable_dir(real_root):
+                if os.path.ismount(real_root) or looks_like_usb_path(real_root):
+                    candidates.append(real_root)
+
+            dirs[:] = [
+                d for d in dirs
+                if os.path.realpath(os.path.join(root, d)) not in excluded_paths
+            ]
+
+    if candidates:
+        selected = sorted(
+            set(candidates),
+            key=lambda path: (
+                0 if os.path.ismount(path) else 1,
+                0 if looks_like_usb_path(path) else 1,
+                len(path.split(os.sep)),
+                path.lower(),
+            ),
+        )[0]
         print(f"Auto-selected USB output directory: {selected}")
-        return selected
-
-    if len(candidates) > 1:
-        # When several mount points are present, keep the first writable one.
-        # This still works well on a single-USB setup.
-        selected = candidates[0]
-        print(f"Multiple writable paths found; using first match: {selected}")
         return selected
 
     fallback_dir = os.path.join(os.getcwd(), "id_scanner_output")
