@@ -5,19 +5,12 @@ import csv
 import time
 import re
 import os
-import importlib
 from datetime import datetime
 
 try:
     import torch
 except Exception:
     torch = None
-
-try:
-    GPIO = importlib.import_module("Jetson.GPIO")
-except Exception:
-    GPIO = None
-
 
 def is_gpu_available():
     return bool(torch is not None and torch.cuda.is_available())
@@ -33,12 +26,6 @@ cv2.setNumThreads(max(1, os.cpu_count() or 1))
 
 
 reader = easyocr.Reader(['en'], gpu=is_gpu_available())
-
-GREEN_LED_PIN = int(os.getenv("GREEN_LED_PIN", "9"))
-LED_BLINK_COUNT = int(os.getenv("LED_BLINK_COUNT", "3"))
-LED_ON_SECONDS = float(os.getenv("LED_ON_SECONDS", "0.15"))
-LED_OFF_SECONDS = float(os.getenv("LED_OFF_SECONDS", "0.15"))
-LED_ENABLED = os.getenv("ENABLE_LED", "1").strip().lower() in {"1", "true", "yes", "on"}
 
 # Camera defaults tuned for Jetson Orin Nano with USB 4K cameras.
 CAMERA_SOURCE = os.getenv("CAMERA_SOURCE", "usb").strip().lower()
@@ -56,35 +43,6 @@ OCR_INTERVAL_SECONDS = float(os.getenv("OCR_INTERVAL_SECONDS", "0.2"))
 # Set this to your mounted USB folder if you want files written there directly.
 # Example on Jetson: /media/admin/USB_DRIVE
 OUTPUT_DIR = os.getenv("ID_SCANNER_OUTPUT_DIR", "").strip()
-
-GPIO_READY = False
-
-
-def setup_led():
-    global GPIO_READY
-
-    if not LED_ENABLED:
-        print("LED disabled; set ENABLE_LED=1 to enable GPIO output")
-        GPIO_READY = False
-        return
-
-    if GPIO is None:
-        print("Jetson.GPIO is not available; LED output disabled")
-        GPIO_READY = False
-        return
-
-    try:
-        GPIO.setmode(GPIO.BOARD)
-        GPIO.setup(GREEN_LED_PIN, GPIO.OUT, initial=GPIO.LOW)
-        GPIO_READY = True
-        print(f"LED configured on GPIO {GREEN_LED_PIN} (BOARD mode)")
-    except PermissionError as exc:
-        print(f"GPIO permission denied. Run as root or adjust permissions: {exc}")
-        GPIO_READY = False
-    except Exception as exc:
-        print(f"GPIO setup failed: {exc}")
-        GPIO_READY = False
-
 
 # -----------------------------
 # CARD DETECTION (ROBUST)
@@ -213,23 +171,6 @@ def save_image(roi, timestamp):
         cv2.imwrite(fallback_file, roi)
         print(f"⚠ Image save fallback used: {fallback_file} ({exc})")
 
-
-def blink_green_led(times=LED_BLINK_COUNT, on_time=LED_ON_SECONDS, off_time=LED_OFF_SECONDS):
-    if not GPIO_READY:
-        return
-
-    try:
-        for _ in range(max(1, times)):
-            GPIO.output(GREEN_LED_PIN, GPIO.HIGH)
-            time.sleep(max(0.01, on_time))
-            GPIO.output(GREEN_LED_PIN, GPIO.LOW)
-            time.sleep(max(0.01, off_time))
-        GPIO.output(GREEN_LED_PIN, GPIO.LOW)
-    except PermissionError:
-        pass
-    except Exception:
-        pass
-
 def find_usb_path():
     if OUTPUT_DIR:
         try:
@@ -273,6 +214,17 @@ def find_usb_path():
     return fallback_dir
 
 
+def draw_centered_overlay(frame, text, color=(255, 255, 255), bg_color=(0, 0, 0), font_scale=1.6, thickness=4, y_ratio=0.5):
+    h, w = frame.shape[:2]
+    font = cv2.FONT_HERSHEY_SIMPLEX
+    text_size, _ = cv2.getTextSize(text, font, font_scale, thickness)
+    x = max(20, (w - text_size[0]) // 2)
+    y = max(text_size[1] + 20, int(h * y_ratio))
+    pad = 20
+    cv2.rectangle(frame, (x - pad, y - text_size[1] - pad), (x + text_size[0] + pad, y + pad), bg_color, -1)
+    cv2.putText(frame, text, (x, y), font, font_scale, color, thickness, cv2.LINE_AA)
+
+
 def create_camera_capture(camera_index=0):
     # On Jetson/Linux, V4L2 is the first thing to try for normal USB cameras.
     if CAMERA_SOURCE in ("auto", "usb"):
@@ -310,10 +262,11 @@ def main():
     if not cap.isOpened():
         raise RuntimeError("Unable to open camera. Check camera index and backend support.")
 
-    setup_led()
-
     cv2.namedWindow("ID Scanner", cv2.WINDOW_NORMAL)
-    cv2.resizeWindow("ID Scanner", 960, 540)
+    try:
+        cv2.setWindowProperty("ID Scanner", cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
+    except Exception:
+        cv2.resizeWindow("ID Scanner", 1920, 1080)
     cv2.moveWindow("ID Scanner", 0, 0)
 
     # Remember when each card ID was last saved so the same card is not scanned twice too quickly.
@@ -333,6 +286,7 @@ def main():
 
     paused = False
     pause_until = 0
+    ready_popup_until = time.time() + 2.0
     
     # Count how many frames in a row the card is missing.
     card_lost_frames = 0
@@ -353,11 +307,19 @@ def main():
         # Pause briefly after a successful scan so the user can remove the card.
 
         if paused:
-            cv2.putText(display, "REMOVE CARD", (50, 100),
-                        cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0, 0, 255), 3)
+            draw_centered_overlay(
+                display,
+                "REMOVE CARD",
+                color=(0, 0, 255),
+                bg_color=(0, 0, 0),
+                font_scale=2.6,
+                thickness=7,
+                y_ratio=0.5,
+            )
 
             if time.time() > pause_until:
                 paused = False
+                ready_popup_until = time.time() + 2.0
 
             cv2.imshow("ID Scanner", display)
             if cv2.waitKey(1) & 0xFF == ord('q'):
@@ -425,10 +387,9 @@ def main():
                                 save_scan(candidate, timestamp)
                                 save_image(roi, timestamp)
 
-                                blink_green_led()
-
                                 paused = True
                                 pause_until = time.time() + 2.5
+                                ready_popup_until = time.time() + 0.5
 
                             # Clear the temporary tracking data after we save or skip the card.
 
@@ -449,10 +410,16 @@ def main():
                 stable_id = None
                 stable_start_time = None
 
-        # Show the current buffer on the video window so debugging is easier.
-
-        cv2.putText(display, f"Buffer: {recent_ids}", (10, 30),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 0), 2)
+        if not paused and time.time() < ready_popup_until:
+            draw_centered_overlay(
+                display,
+                "SCANNER READY",
+                color=(0, 255, 0),
+                bg_color=(0, 0, 0),
+                font_scale=1.6,
+                thickness=5,
+                y_ratio=0.2,
+            )
 
         cv2.imshow("ID Scanner", display)
 
@@ -461,9 +428,6 @@ def main():
 
     cap.release()
     cv2.destroyAllWindows()
-
-    if GPIO_READY:
-        GPIO.cleanup()
 
 
 if __name__ == "__main__":
