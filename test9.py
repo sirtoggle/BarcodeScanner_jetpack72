@@ -124,6 +124,8 @@ CONFIRMATION_WINDOW = env_int(
 OUTPUT_DIR = os.getenv("ID_SCANNER_OUTPUT_DIR", "").strip()
 SAVE_IMAGES = env_bool("ID_SCANNER_SAVE_IMAGES", True)
 DISABLE_DISPLAY_BLANKING = env_bool("ID_SCANNER_DISABLE_BLANKING", True)
+FULLSCREEN_DISPLAY = env_bool("ID_SCANNER_FULLSCREEN", True)
+WINDOW_NAME = "ID Scanner"
 
 if ID_EXPECTED_LENGTH is not None and not ID_MIN_LENGTH <= ID_EXPECTED_LENGTH <= ID_MAX_LENGTH:
     raise ValueError("ID_EXPECTED_LENGTH must be between ID_MIN_LENGTH and ID_MAX_LENGTH")
@@ -372,22 +374,34 @@ def create_ocr_reader() -> Any:
 
 def configure_display_window() -> None:
     try:
-        cv2.namedWindow("ID Scanner", cv2.WINDOW_NORMAL)
+        flags = cv2.WINDOW_NORMAL
+        if hasattr(cv2, "WINDOW_GUI_NORMAL"):
+            flags |= cv2.WINDOW_GUI_NORMAL
+        cv2.namedWindow(WINDOW_NAME, flags)
     except Exception:
         pass
 
 
-def apply_fullscreen_window() -> None:
-    # Preferred method: ask OpenCV to set the window fullscreen.
+def apply_fullscreen_window() -> bool:
+    if not FULLSCREEN_DISPLAY:
+        return True
+
+    # OpenCV/Qt on Jetson only honors fullscreen after imshow() has mapped the
+    # window.  Process pending GUI events before asking the window manager.
     try:
-        cv2.setWindowProperty("ID Scanner", cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
-        return
+        cv2.waitKey(1)
+        cv2.moveWindow(WINDOW_NAME, 0, 0)
+        cv2.setWindowProperty(WINDOW_NAME, cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
+        cv2.waitKey(1)
+        fullscreen_state = cv2.getWindowProperty(WINDOW_NAME, cv2.WND_PROP_FULLSCREEN)
+        if fullscreen_state >= 0.5:
+            return True
     except Exception:
         pass
 
-    # Fallback: resize the window to the display size (works on Windows/Linux)
+    # Fallback: cover the display even when the OpenCV backend does not expose
+    # true fullscreen mode.
     try:
-        # Try to get the native screen size via tkinter (usually available).
         import tkinter as tk
 
         root = tk.Tk()
@@ -396,26 +410,43 @@ def apply_fullscreen_window() -> None:
         screen_h = root.winfo_screenheight()
         root.destroy()
 
-        cv2.resizeWindow("ID Scanner", int(screen_w), int(screen_h))
-        cv2.moveWindow("ID Scanner", 0, 0)
-        return
+        cv2.resizeWindow(WINDOW_NAME, int(screen_w), int(screen_h))
+        cv2.moveWindow(WINDOW_NAME, 0, 0)
+        return True
     except Exception:
         pass
 
     # Last resort: try common X11/window utilities for Linux.
     for command in (
-        ["wmctrl", "-r", "ID Scanner", "-b", "add,fullscreen"],
-        ["wmctrl", "-r", "ID Scanner", "-e", "0,0,0,1024,600"],
-        ["xdotool", "search", "--name", "ID Scanner", "windowactivate", "windowmove", "0", "0", "windowsize", "100%", "100%"],
+        ["wmctrl", "-r", WINDOW_NAME, "-b", "add,fullscreen"],
+        ["wmctrl", "-r", WINDOW_NAME, "-e", "0,0,0,1024,600"],
+        ["xdotool", "search", "--name", WINDOW_NAME, "windowactivate", "windowmove", "0", "0", "windowsize", "100%", "100%"],
     ):
         try:
-            subprocess.run(command, check=False, capture_output=True, text=True, timeout=3)
+            result = subprocess.run(command, check=False, capture_output=True, text=True, timeout=3)
+            if result.returncode == 0:
+                return True
         except FileNotFoundError:
             continue
         except subprocess.TimeoutExpired:
             continue
         except Exception:
             continue
+
+    return False
+
+
+def show_display_frame(frame: np.ndarray, frame_number: int) -> int:
+    cv2.imshow(WINDOW_NAME, frame)
+
+    # Retry while the Jetson desktop compositor finishes mapping the window.
+    # These attempts happen only during startup and do not affect steady-state
+    # scanner performance.
+    if FULLSCREEN_DISPLAY and frame_number in (1, 5, 20):
+        cv2.waitKey(30)
+        apply_fullscreen_window()
+
+    return cv2.waitKey(1) & 0xFF
 
 
 def set_display_blanking(disabled: bool) -> None:
@@ -492,11 +523,10 @@ def main() -> None:
     card_lost_frames = 0
     lost_threshold = 5
     camera_read_failures = 0
+    displayed_frames = 0
 
     set_display_blanking(True)
     configure_display_window()
-    time.sleep(0.2)
-    apply_fullscreen_window()
 
     try:
         while True:
@@ -529,8 +559,8 @@ def main() -> None:
                     displayed_countdown = None
                     tracker.reset()
 
-                cv2.imshow("ID Scanner", display)
-                if cv2.waitKey(1) & 0xFF == ord("q"):
+                displayed_frames += 1
+                if show_display_frame(display, displayed_frames) == ord("q"):
                     break
                 continue
 
@@ -643,8 +673,8 @@ def main() -> None:
                     y_ratio=0.5,
                 )
 
-            cv2.imshow("ID Scanner", display)
-            if cv2.waitKey(1) & 0xFF == ord("q"):
+            displayed_frames += 1
+            if show_display_frame(display, displayed_frames) == ord("q"):
                 break
     finally:
         cap.release()

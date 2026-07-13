@@ -111,6 +111,7 @@ Useful optional tuning settings:
 | `OCR_MIN_CONFIDENCE` | `0.40` | Rejects uncertain OCR readings. |
 | `CONFIRMATION_MATCHES` | `3` | Matching recent readings required before saving. |
 | `ID_SCANNER_SAVE_IMAGES` | `true` | Set to `false` if card images should not be retained. |
+| `ID_SCANNER_FULLSCREEN` | `true` | Opens the live video as a borderless fullscreen window. |
 
 ## 5. Use the scanner
 - Place a card or ID in front of the camera.
