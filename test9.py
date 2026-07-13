@@ -111,11 +111,13 @@ OCR_INTERVAL_SECONDS = env_float("OCR_INTERVAL_SECONDS", 0.18, minimum=0.05)
 OCR_CANVAS_SIZE = env_int("OCR_CANVAS_SIZE", 1280, minimum=320)
 OCR_MIN_CONFIDENCE = env_float("OCR_MIN_CONFIDENCE", 0.40, minimum=0.0)
 NAME_MIN_CONFIDENCE = env_float("NAME_MIN_CONFIDENCE", 0.45, minimum=0.0)
-LOGO_WORDS = tuple(
+DEFAULT_LOGO_WORDS = ("Wynn Rewards", "Encore Boston Harbor")
+CUSTOM_LOGO_WORDS = tuple(
     value.strip()
     for value in os.getenv("ID_SCANNER_LOGO_WORDS", "").replace(";", ",").split(",")
     if value.strip()
 )
+LOGO_WORDS = DEFAULT_LOGO_WORDS + CUSTOM_LOGO_WORDS
 ID_MIN_LENGTH = env_int("ID_MIN_LENGTH", 6, minimum=1)
 ID_MAX_LENGTH = env_int("ID_MAX_LENGTH", 20, minimum=ID_MIN_LENGTH)
 ID_EXPECTED_LENGTH = env_int("ID_EXPECTED_LENGTH", 0, minimum=0) or None

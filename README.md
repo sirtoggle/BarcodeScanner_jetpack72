@@ -151,8 +151,9 @@ validated as calendar dates and excluded from ID selection.
 
 Name OCR runs only once after the numeric ID is confirmed, so it does not slow
 the live detection loop. It requires a multi-word name and removes common card
-labels and organization terms. Single-word logos are ignored. To block branding
-that is unique to your cards, list distinctive logo words separated by commas:
+labels and organization terms. Single-word logos are ignored. `Wynn Rewards`
+and `Encore Boston Harbor` are always blocked. To block additional branding,
+list distinctive logo names separated by commas:
 
 ```bash
 export ID_SCANNER_LOGO_WORDS='ACME,WAREHOUSE'
