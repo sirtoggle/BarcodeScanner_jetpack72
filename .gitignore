@@ -4,3 +4,4 @@ id_scanner_output/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
+scanner.env

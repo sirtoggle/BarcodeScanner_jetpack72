@@ -4,6 +4,24 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 IMAGE_NAME="barcode-scanner:jetson"
 MODEL_CACHE="${XDG_CACHE_HOME:-$HOME/.cache}/barcode-scanner/easyocr"
+CONFIG_FILE="${ID_SCANNER_CONFIG_FILE:-$SCRIPT_DIR/scanner.env}"
+
+if [ -f "$CONFIG_FILE" ]; then
+  echo "Loading scanner settings from $CONFIG_FILE"
+  set -a
+  # This local file is owned and maintained by the Jetson operator.
+  source "$CONFIG_FILE"
+  set +a
+fi
+
+container_name_args=()
+if [ -n "${ID_SCANNER_CONTAINER_NAME:-}" ]; then
+  if [[ ! "$ID_SCANNER_CONTAINER_NAME" =~ ^[A-Za-z0-9][A-Za-z0-9_.-]+$ ]]; then
+    echo "ERROR: ID_SCANNER_CONTAINER_NAME contains invalid characters." >&2
+    exit 1
+  fi
+  container_name_args=(--name "$ID_SCANNER_CONTAINER_NAME")
+fi
 
 for command_name in docker autotag jetson-containers; do
   if ! command -v "$command_name" >/dev/null 2>&1; then
@@ -42,6 +60,7 @@ fi
 
 echo "Starting the scanner..."
 exec jetson-containers run \
+  "${container_name_args[@]}" \
   -v "$SCRIPT_DIR:/workspace" \
   -v "/media:/media" \
   -v "$MODEL_CACHE:/root/.EasyOCR" \

@@ -88,6 +88,48 @@ To open a diagnostic shell instead of immediately starting the scanner:
 bash run_jetson.sh bash
 ```
 
+### Start automatically after boot
+
+The fullscreen camera window needs a logged-in graphical desktop. Enable
+automatic desktop login for `ebh_admin` in Ubuntu's user settings, then install
+the per-user startup service from a normal host terminal:
+
+```bash
+cd /home/ebh_admin/BarcodeScanner_jetpack72
+bash install_boot_service.sh
+sudo reboot
+```
+
+Do not run the installer with `sudo`. Five seconds after the desktop login, it
+imports the active display settings and starts the scanner. The service retries
+automatically if Docker, the camera, or the graphical session is not ready yet,
+and restarts the scanner if it exits unexpectedly.
+
+Settings exported in a terminal do not survive reboot. Put persistent values in
+`scanner.env`, which the installer creates from `scanner.env.example`. For
+example:
+
+```bash
+nano /home/ebh_admin/BarcodeScanner_jetpack72/scanner.env
+```
+
+Useful service commands:
+
+```bash
+systemctl --user status barcode-scanner.service
+systemctl --user stop barcode-scanner.service
+bash start_scanner_on_login.sh
+journalctl --user -u barcode-scanner.service -f
+```
+
+Because this is a kiosk service, pressing `q` causes it to restart after ten
+seconds. Use `systemctl --user stop barcode-scanner.service` when maintenance is
+required. To remove boot startup entirely:
+
+```bash
+bash install_boot_service.sh --remove
+```
+
 If you want output files written directly to a USB drive, set the output folder first:
 
 ```bash
