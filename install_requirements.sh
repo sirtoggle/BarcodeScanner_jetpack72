@@ -69,10 +69,14 @@ install_system_opencv
 
 python3 - <<'PY'
 import cv2
+import numpy
+import sys
 import torch
 import torchvision
 
+print(f"Using Python {sys.version.split()[0]}")
 print(f"Using OpenCV {cv2.__version__}")
+print(f"Using NumPy {numpy.__version__}")
 print(f"Using PyTorch {torch.__version__}")
 print(f"Using torchvision {torchvision.__version__}")
 PY
@@ -96,6 +100,7 @@ fi
 python3 - <<'PY'
 import cv2
 import easyocr
+import numpy
 import torch
 
 build_info = cv2.getBuildInformation()
@@ -103,6 +108,7 @@ gstreamer_lines = [line.strip() for line in build_info.splitlines() if "GStreame
 cuda_available = torch.cuda.is_available()
 gstreamer_enabled = any("YES" in line for line in gstreamer_lines)
 print(f"EasyOCR {easyocr.__version__} installed successfully")
+print(f"NumPy {numpy.__version__} imports successfully with OpenCV {cv2.__version__}")
 print(f"CUDA available: {cuda_available}")
 print(gstreamer_lines[0] if gstreamer_lines else "GStreamer status was not reported by OpenCV")
 if not cuda_available:
