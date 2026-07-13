@@ -1,0 +1,9 @@
+.git
+.agents
+.vscode
+__pycache__
+tests
+*.csv
+*.jpg
+*.jpeg
+*.png

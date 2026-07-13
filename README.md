@@ -33,51 +33,66 @@ docker info
 ```
 
 Do not continue until that command succeeds without a socket permission error.
-Then install and start Jetson Containers as your normal user:
+Then install Jetson Containers as your normal user:
 
 ```bash
 git clone https://github.com/dusty-nv/jetson-containers
 sudo mkdir -p /usr/local/bin
 bash jetson-containers/install.sh
-cd /home/ebh_admin/BarcodeScanner_jetpack72
-jetson-containers run -v "$PWD:/workspace" -v "/media:/media" $(autotag l4t-pytorch)
 ```
 
-## 3. Install the project dependencies
-After the container starts on the Jetson device, run:
+## 3. Build and start the scanner
+Run this from the normal Jetson host terminal, not from inside a container:
 
 ```bash
-cd /workspace
-bash install_requirements.sh
+cd /home/ebh_admin/BarcodeScanner_jetpack72
+bash run_jetson.sh
 ```
 
-The launch command explicitly mounts the project at `/workspace` and the Jetson's
-removable-media directory at `/media`, so the scanner can access both its code
-and the daily USB stick.
+The first launch builds a reusable local image containing all Python and OpenCV
+dependencies. Later launches reuse Docker's cached image and do not require
+`bash install_requirements.sh`. The script mounts the current project at
+`/workspace`, mounts removable media at `/media`, preserves the downloaded OCR
+model on the host, and starts `test9.py` automatically.
 
-The installer keeps the container's JetPack-compatible PyTorch and torchvision
-builds. If the container does not include `cv2`, it installs Ubuntu's
-GStreamer-enabled `python3-opencv` package. Do not install `opencv-python` or
-`opencv-python-headless` with pip; those generic packages can replace the camera
-stack. OpenCV performs the lightweight, downscaled card detection on the CPU,
-while EasyOCR runs its inference on the Jetson GPU.
+The image keeps the base container's JetPack-compatible PyTorch and torchvision
+builds and installs Ubuntu's GStreamer-enabled OpenCV when needed. Do not install
+`opencv-python` or `opencv-python-headless`; those generic packages can replace
+the camera stack.
 
 Both the legacy Python 3.8 `l4t-pytorch` image and newer Python images are
 supported. The installer automatically selects compatible NumPy, SciPy,
 scikit-image, and python-bidi releases for the Python version in the container.
 
-## 4. Start the scanner
+On first run, the OCR model may be downloaded automatically. It is stored under
+the Jetson user's cache directory so subsequent temporary containers reuse it.
+
+### Installing updates
+
+Press `q` to stop the scanner. If you are at a container prompt, run `exit` first.
+Then update and restart from the normal Jetson host terminal:
+
 ```bash
-python3 test9.py
+cd /home/ebh_admin/BarcodeScanner_jetpack72
+git pull --ff-only
+bash run_jetson.sh
 ```
 
-On first run, the OCR model may be downloaded automatically.
+Do not run `git pull` from `/workspace` inside the container. `/workspace` is the
+host checkout mounted into the temporary container, while Git credentials and
+repository ownership belong to the normal host user.
+
+To open a diagnostic shell instead of immediately starting the scanner:
+
+```bash
+bash run_jetson.sh bash
+```
 
 If you want output files written directly to a USB drive, set the output folder first:
 
 ```bash
 export ID_SCANNER_OUTPUT_DIR="/media/<your-user>/<your-usb-name>"
-python3 test9.py
+bash run_jetson.sh
 ```
 
 The output mount is rechecked before every confirmed scan. You can safely unmount
@@ -92,7 +107,7 @@ on your cards. For example, for an eight-digit ID:
 
 ```bash
 export ID_EXPECTED_LENGTH=8
-python3 test9.py
+bash run_jetson.sh
 ```
 
 If IDs also have a known prefix or format, you can require it with a full regular
@@ -107,18 +122,19 @@ Useful optional tuning settings:
 | Setting | Default | Purpose |
 | --- | ---: | --- |
 | `DETECTION_MAX_WIDTH` | `960` | Lower values reduce CPU load; raise it if small cards are missed. |
+| `DISPLAY_MAX_WIDTH` | `960` | Safe fallback width; fullscreen geometry is chosen by the desktop. |
 | `OCR_INTERVAL_SECONDS` | `0.18` | Time between OCR attempts while a card is visible. |
 | `OCR_MIN_CONFIDENCE` | `0.40` | Rejects uncertain OCR readings. |
 | `CONFIRMATION_MATCHES` | `3` | Matching recent readings required before saving. |
 | `ID_SCANNER_SAVE_IMAGES` | `true` | Set to `false` if card images should not be retained. |
 | `ID_SCANNER_FULLSCREEN` | `true` | Opens the live video as a borderless fullscreen window. |
 
-## 5. Use the scanner
+## 4. Use the scanner
 - Place a card or ID in front of the camera.
 - The app will try to detect and read it.
 - Press q in the camera window to quit.
 
-## 6. Optional: GPIO support
+## 5. Optional: GPIO support
 If you need external hardware control, install Jetson GPIO inside the container:
 
 ```bash
@@ -128,7 +144,7 @@ sudo apt install -y libgpiod-dev
 python3 -m pip install Jetson.GPIO
 ```
 
-## 7. Troubleshooting
+## 6. Troubleshooting
 If the app does not start on the Jetson device:
 - Check that the camera is connected.
 - Confirm you are running inside the Jetson GPU container on that device.

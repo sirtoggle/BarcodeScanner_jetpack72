@@ -102,7 +102,7 @@ CAMERA_FLIP_METHOD = env_int("CAMERA_FLIP_METHOD", 0, minimum=0)
 # Card detection runs on a smaller CPU-side frame; OCR still receives the
 # original-resolution card region.
 DETECTION_MAX_WIDTH = env_int("DETECTION_MAX_WIDTH", 960, minimum=320)
-DISPLAY_MAX_WIDTH = env_int("DISPLAY_MAX_WIDTH", 1280, minimum=320)
+DISPLAY_MAX_WIDTH = env_int("DISPLAY_MAX_WIDTH", 960, minimum=320)
 
 # OCR cadence can be adjusted without editing code.
 OCR_INTERVAL_SECONDS = env_float("OCR_INTERVAL_SECONDS", 0.18, minimum=0.05)
@@ -399,28 +399,12 @@ def apply_fullscreen_window() -> bool:
     except Exception:
         pass
 
-    # Fallback: cover the display even when the OpenCV backend does not expose
-    # true fullscreen mode.
-    try:
-        import tkinter as tk
-
-        root = tk.Tk()
-        root.withdraw()
-        screen_w = root.winfo_screenwidth()
-        screen_h = root.winfo_screenheight()
-        root.destroy()
-
-        cv2.resizeWindow(WINDOW_NAME, int(screen_w), int(screen_h))
-        cv2.moveWindow(WINDOW_NAME, 0, 0)
-        return True
-    except Exception:
-        pass
-
-    # Last resort: try common X11/window utilities for Linux.
+    # Ask the desktop compositor to choose the monitor geometry. Avoid resizing
+    # to a reported pixel size here: display scaling on Jetson can make that
+    # value larger than the usable desktop and push the window off-screen.
     for command in (
         ["wmctrl", "-r", WINDOW_NAME, "-b", "add,fullscreen"],
-        ["wmctrl", "-r", WINDOW_NAME, "-e", "0,0,0,1024,600"],
-        ["xdotool", "search", "--name", WINDOW_NAME, "windowactivate", "windowmove", "0", "0", "windowsize", "100%", "100%"],
+        ["wmctrl", "-r", WINDOW_NAME, "-b", "add,maximized_vert,maximized_horz"],
     ):
         try:
             result = subprocess.run(command, check=False, capture_output=True, text=True, timeout=3)
@@ -438,6 +422,14 @@ def apply_fullscreen_window() -> bool:
 
 def show_display_frame(frame: np.ndarray, frame_number: int) -> int:
     cv2.imshow(WINDOW_NAME, frame)
+
+    # This becomes the safe fallback size if the GUI backend cannot enter true
+    # fullscreen. The default 960px-wide frame fits common small Jetson displays.
+    if frame_number == 1:
+        try:
+            cv2.resizeWindow(WINDOW_NAME, frame.shape[1], frame.shape[0])
+        except Exception:
+            pass
 
     # Retry while the Jetson desktop compositor finishes mapping the window.
     # These attempts happen only during startup and do not affect steady-state

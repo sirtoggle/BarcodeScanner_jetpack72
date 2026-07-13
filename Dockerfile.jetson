@@ -1,0 +1,17 @@
+ARG BASE_IMAGE
+FROM ${BASE_IMAGE}
+
+ENV PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PIP_NO_CACHE_DIR=1
+
+WORKDIR /opt/barcode-scanner-build
+COPY requirements.txt install_requirements.sh ./
+
+# CUDA devices are attached when the finished image is run, not while Docker
+# builds it.  Install and import-check everything here, but defer the CUDA
+# availability requirement until scanner startup.
+RUN ID_SCANNER_SKIP_GPU_CHECK=1 bash ./install_requirements.sh \
+    && rm -rf /var/lib/apt/lists/* /root/.cache/pip
+
+WORKDIR /workspace
+CMD ["bash"]
