@@ -102,6 +102,11 @@ changed. Avoid presenting a card during the brief interval when no stick is
 mounted, because the scanner will use its local fallback folder to prevent data
 loss.
 
+Each CSV row contains the detected ID, the scanner timestamp, and the printed
+card date. The third column is blank when no valid printed date is detected.
+Dates whose `/` separators are misread as `7` are validated as calendar dates
+and excluded from ID selection.
+
 For the most reliable ID selection, configure the exact number of digits printed
 on your cards. For example, for an eight-digit ID:
 

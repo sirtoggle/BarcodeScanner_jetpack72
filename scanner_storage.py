@@ -24,12 +24,19 @@ def set_private_permissions(filename: str) -> None:
             pass
 
 
-def write_scan_row(output_dir: str, id_number: str, timestamp: str) -> str:
+def write_scan_row(
+    output_dir: str,
+    id_number: str,
+    timestamp: str,
+    card_date: str = "",
+) -> str:
     date_str = datetime.now().strftime("%m-%d-%Y")
     filename = os.path.join(output_dir, f"scans{date_str}.csv")
 
     with open(filename, "a", newline="", encoding="utf-8") as output_file:
-        csv.writer(output_file).writerow([id_number, timestamp])
+        # Preserve the original ID and scan-time column positions. Card date is
+        # blank when OCR did not confidently detect a valid printed date.
+        csv.writer(output_file).writerow([id_number, timestamp, card_date])
         output_file.flush()
         os.fsync(output_file.fileno())
     set_private_permissions(filename)

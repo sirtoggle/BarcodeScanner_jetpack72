@@ -9,6 +9,7 @@ from typing import Any, Optional, Tuple
 from scanner_core import (
     ConsensusTracker,
     compile_id_pattern,
+    extract_card_date,
     extract_id,
     is_gpu_available,
     path_is_on_mount,
@@ -204,17 +205,17 @@ def find_card(frame: np.ndarray) -> Optional[Tuple[int, int, int, int]]:
 # -----------------------------
 # SAVE FUNCTIONS
 # -----------------------------
-def save_scan(id_number: str, timestamp: str, output_dir: str) -> str:
+def save_scan(id_number: str, timestamp: str, card_date: str, output_dir: str) -> str:
     try:
-        write_scan_row(output_dir, id_number, timestamp)
-        print(f"SAVED: {id_number} | {timestamp}")
+        write_scan_row(output_dir, id_number, timestamp, card_date)
+        print(f"SAVED: {id_number} | {timestamp} | card date: {card_date or 'not detected'}")
         return output_dir
     except OSError as exc:
         fallback_dir = fallback_output_dir(os.getcwd())
         if os.path.realpath(output_dir) == os.path.realpath(fallback_dir):
             raise RuntimeError(f"Unable to save scan data to {output_dir}: {exc}") from exc
 
-        filename = write_scan_row(fallback_dir, id_number, timestamp)
+        filename = write_scan_row(fallback_dir, id_number, timestamp, card_date)
         print(f"WARNING: Output failed at {output_dir}; saved CSV to {filename}: {exc}")
         return fallback_dir
 
@@ -506,6 +507,7 @@ def main() -> None:
         raise RuntimeError("Unable to open camera. Check camera index and backend support.")
 
     tracker = ConsensusTracker(CONFIRMATION_MATCHES, CONFIRMATION_WINDOW)
+    date_tracker = ConsensusTracker(1, CONFIRMATION_WINDOW)
     scanned_ids: dict[str, float] = {}
     cooldown_seconds = 10.0
     last_ocr_time = 0.0
@@ -550,6 +552,7 @@ def main() -> None:
                     paused = False
                     displayed_countdown = None
                     tracker.reset()
+                    date_tracker.reset()
 
                 displayed_frames += 1
                 if show_display_frame(display, displayed_frames) == ord("q"):
@@ -590,7 +593,7 @@ def main() -> None:
                             beamWidth=1,
                             batch_size=1,
                             workers=0,
-                            allowlist="0123456789",
+                            allowlist="0123456789/-",
                             detail=1,
                             paragraph=False,
                             canvas_size=OCR_CANVAS_SIZE,
@@ -604,12 +607,21 @@ def main() -> None:
                             expected_length=ID_EXPECTED_LENGTH,
                             pattern=ID_PATTERN,
                         )
+                        card_date = extract_card_date(
+                            results,
+                            min_confidence=OCR_MIN_CONFIDENCE,
+                        )
                     except Exception as exc:
                         print(f"WARNING: OCR failed for this frame: {exc}")
                         id_number = None
+                        card_date = None
 
                     confirmed_id, match_count = tracker.observe(id_number)
-                    print(f"Detected: {id_number} ({match_count}/{CONFIRMATION_MATCHES})")
+                    date_tracker.observe(card_date)
+                    print(
+                        f"Detected ID: {id_number} ({match_count}/{CONFIRMATION_MATCHES}); "
+                        f"card date: {card_date}"
+                    )
 
                     if id_number is not None and confirmed_id is None:
                         displayed_countdown = max(1, CONFIRMATION_MATCHES - match_count)
@@ -629,11 +641,21 @@ def main() -> None:
                         if last_saved is None:
                             output_dir = refresh_output_dir(output_dir)
                             timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-                            output_dir = save_scan(confirmed_id, timestamp, output_dir)
+                            recent_dates = [value for value in date_tracker.readings if value]
+                            saved_card_date = (
+                                max(recent_dates, key=recent_dates.count) if recent_dates else ""
+                            )
+                            output_dir = save_scan(
+                                confirmed_id,
+                                timestamp,
+                                saved_card_date,
+                                output_dir,
+                            )
                             output_dir = save_image(roi, timestamp, output_dir)
                             scanned_ids[confirmed_id] = confirmation_time
 
                         tracker.reset()
+                        date_tracker.reset()
                         displayed_countdown = None
                         paused = True
                         pause_until = time.monotonic() + 2.5
@@ -641,6 +663,7 @@ def main() -> None:
                 card_lost_frames += 1
                 if card_lost_frames >= lost_threshold:
                     tracker.reset()
+                    date_tracker.reset()
                     displayed_countdown = None
 
             if displayed_countdown is None or card_lost_frames > 0:

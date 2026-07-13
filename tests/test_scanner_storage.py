@@ -18,11 +18,16 @@ class ScannerStorageTests(unittest.TestCase):
 
     def test_csv_row_is_flushed_to_disk(self) -> None:
         with tempfile.TemporaryDirectory() as output_dir:
-            filename = write_scan_row(output_dir, "123456", "2026-07-13_12-00-00")
+            filename = write_scan_row(
+                output_dir,
+                "123456",
+                "2026-07-13_12-00-00",
+                "07/13/2026",
+            )
 
             with open(filename, newline="", encoding="utf-8") as input_file:
                 self.assertEqual(
-                    [["123456", "2026-07-13_12-00-00"]],
+                    [["123456", "2026-07-13_12-00-00", "07/13/2026"]],
                     list(csv.reader(input_file)),
                 )
 

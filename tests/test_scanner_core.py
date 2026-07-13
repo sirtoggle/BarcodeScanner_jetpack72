@@ -1,7 +1,13 @@
 import re
 import unittest
 
-from scanner_core import ConsensusTracker, extract_id, path_is_on_mount, scale_box
+from scanner_core import (
+    ConsensusTracker,
+    extract_card_date,
+    extract_id,
+    path_is_on_mount,
+    scale_box,
+)
 
 
 class MountPathTests(unittest.TestCase):
@@ -56,6 +62,40 @@ class ExtractIdTests(unittest.TestCase):
                 min_confidence=0.40,
             ),
         )
+
+    def test_rejects_date_when_slashes_are_read_as_sevens(self) -> None:
+        results = [
+            (None, "0771372026", 0.99),
+            (None, "12345678", 0.80),
+        ]
+
+        self.assertEqual("12345678", extract_id(results))
+
+    def test_returns_none_when_only_candidate_is_a_corrupted_date(self) -> None:
+        self.assertIsNone(extract_id([(None, "0771372026", 0.99)]))
+
+
+class ExtractCardDateTests(unittest.TestCase):
+    def test_extracts_and_normalizes_date_with_slashes(self) -> None:
+        self.assertEqual(
+            "07/13/2026",
+            extract_card_date([(None, "07/13/2026", 0.91)]),
+        )
+
+    def test_recovers_date_when_both_slashes_are_read_as_sevens(self) -> None:
+        self.assertEqual(
+            "07/13/2026",
+            extract_card_date([(None, "0771372026", 0.91)]),
+        )
+
+    def test_recovers_date_when_only_one_slash_is_read_as_seven(self) -> None:
+        self.assertEqual(
+            "07/13/2026",
+            extract_card_date([(None, "07713/2026", 0.91)]),
+        )
+
+    def test_rejects_invalid_calendar_date(self) -> None:
+        self.assertIsNone(extract_card_date([(None, "1374072026", 0.99)]))
 
 
 class ConsensusTrackerTests(unittest.TestCase):

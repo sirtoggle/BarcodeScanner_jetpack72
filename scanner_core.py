@@ -4,10 +4,100 @@ import os
 import re
 import warnings
 from collections import deque
+from datetime import datetime
 from typing import Any, Iterable, Optional, Pattern, Sequence, Tuple
 
 
 OcrResult = Tuple[Any, str, Any]
+
+
+def _normalize_card_date(month_text: str, day_text: str, year_text: str) -> Optional[str]:
+    try:
+        month = int(month_text)
+        day = int(day_text)
+        year = int(year_text)
+    except ValueError:
+        return None
+
+    if len(year_text) == 2:
+        year += 2000 if year <= 69 else 1900
+    if not 1900 <= year <= 2100:
+        return None
+
+    try:
+        parsed = datetime(year, month, day)
+    except ValueError:
+        return None
+    return parsed.strftime("%m/%d/%Y")
+
+
+def _extract_date_from_text(text: str) -> Optional[str]:
+    compact_text = re.sub(r"\s+", "", text)
+
+    # Normal US dates such as 07/13/2026 or 07-13-2026. Also accept the
+    # unambiguous ISO order 2026/07/13.
+    for match in re.finditer(
+        r"(?<!\d)(\d{1,4})[./-](\d{1,2})[./-](\d{2,4})(?!\d)",
+        compact_text,
+    ):
+        first, second, third = match.groups()
+        if len(first) == 4:
+            normalized = _normalize_card_date(second, third, first)
+        else:
+            normalized = _normalize_card_date(first, second, third)
+        if normalized is not None:
+            return normalized
+
+    # EasyOCR sometimes recognizes one or both slashes as the digit 7. Accept
+    # that substitution only at the two fixed separator positions and only when
+    # the remaining value is a valid calendar date.
+    for match in re.finditer(
+        r"(?<!\d)(\d{2})([./-]|7)(\d{2})([./-]|7)(\d{4})(?!\d)",
+        compact_text,
+    ):
+        month, first_separator, day, second_separator, year = match.groups()
+        if "7" not in (first_separator, second_separator):
+            continue
+        normalized = _normalize_card_date(month, day, year)
+        if normalized is not None:
+            return normalized
+
+    for match in re.finditer(
+        r"(?<!\d)(\d{4})([./-]|7)(\d{2})([./-]|7)(\d{2})(?!\d)",
+        compact_text,
+    ):
+        year, first_separator, month, second_separator, day = match.groups()
+        if "7" not in (first_separator, second_separator):
+            continue
+        normalized = _normalize_card_date(month, day, year)
+        if normalized is not None:
+            return normalized
+
+    return None
+
+
+def extract_card_date(
+    results: Iterable[OcrResult],
+    *,
+    min_confidence: float = 0.40,
+) -> Optional[str]:
+    """Return a normalized card date without treating arbitrary digits as dates."""
+    candidates: list[tuple[float, str]] = []
+    for result in results:
+        if len(result) < 3:
+            continue
+        try:
+            confidence = float(result[2])
+        except (TypeError, ValueError):
+            continue
+        if confidence < min_confidence:
+            continue
+
+        candidate = _extract_date_from_text(str(result[1]))
+        if candidate is not None:
+            candidates.append((confidence, candidate))
+
+    return max(candidates)[1] if candidates else None
 
 
 def path_is_on_mount(path: str, mounts: Sequence[str]) -> bool:
@@ -89,6 +179,11 @@ def extract_id(
             continue
 
         if confidence < min_confidence:
+            continue
+
+        # A validated date is a separate card field and must never compete with
+        # the identifier, including when OCR replaced both slashes with 7.
+        if _extract_date_from_text(text) is not None:
             continue
 
         compact_text = re.sub(r"[\s-]+", "", text)
