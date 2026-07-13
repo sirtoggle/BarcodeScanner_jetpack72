@@ -2,7 +2,7 @@ import unittest
 import warnings
 from types import SimpleNamespace
 
-import test9
+from scanner_core import is_gpu_available
 
 
 class TorchGpuDetectionTests(unittest.TestCase):
@@ -18,7 +18,7 @@ class TorchGpuDetectionTests(unittest.TestCase):
 
         with warnings.catch_warnings(record=True) as captured:
             warnings.simplefilter("always")
-            available = test9.is_gpu_available(fake_torch)
+            available = is_gpu_available(fake_torch)
 
         self.assertTrue(available)
         self.assertEqual(

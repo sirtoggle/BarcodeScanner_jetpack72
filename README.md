@@ -35,8 +35,13 @@ After the container starts on the Jetson device, run:
 
 ```bash
 cd /workspace/BarcodeScanner_jetpack72
-python3 -m pip install -r requirements.txt
+bash install_requirements.sh
 ```
+
+The installer deliberately keeps the container's JetPack-compatible OpenCV,
+PyTorch, and torchvision builds. Do not install `opencv-python` or
+`opencv-python-headless` into this container; those generic packages can replace
+the accelerated camera stack.
 
 ## 4. Start the scanner
 ```bash
@@ -51,6 +56,38 @@ If you want output files written directly to a USB drive, set the output folder 
 export ID_SCANNER_OUTPUT_DIR="/media/<your-user>/<your-usb-name>"
 python3 test9.py
 ```
+
+The output mount is rechecked before every confirmed scan. You can safely unmount
+the old stick and insert a blank replacement while the scanner remains running;
+the next scan will use the newly mounted stick even if its label and mount path
+changed. Avoid presenting a card during the brief interval when no stick is
+mounted, because the scanner will use its local fallback folder to prevent data
+loss.
+
+For the most reliable ID selection, configure the exact number of digits printed
+on your cards. For example, for an eight-digit ID:
+
+```bash
+export ID_EXPECTED_LENGTH=8
+python3 test9.py
+```
+
+If IDs also have a known prefix or format, you can require it with a full regular
+expression. This example accepts eight-digit IDs beginning with `12`:
+
+```bash
+export ID_PATTERN='12[0-9]{6}'
+```
+
+Useful optional tuning settings:
+
+| Setting | Default | Purpose |
+| --- | ---: | --- |
+| `DETECTION_MAX_WIDTH` | `960` | Lower values reduce CPU load; raise it if small cards are missed. |
+| `OCR_INTERVAL_SECONDS` | `0.18` | Time between OCR attempts while a card is visible. |
+| `OCR_MIN_CONFIDENCE` | `0.40` | Rejects uncertain OCR readings. |
+| `CONFIRMATION_MATCHES` | `3` | Matching recent readings required before saving. |
+| `ID_SCANNER_SAVE_IMAGES` | `true` | Set to `false` if card images should not be retained. |
 
 ## 5. Use the scanner
 - Place a card or ID in front of the camera.

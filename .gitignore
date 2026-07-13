@@ -1,0 +1,6 @@
+__pycache__/
+*.py[cod]
+id_scanner_output/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
