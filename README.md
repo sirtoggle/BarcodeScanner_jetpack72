@@ -1,65 +1,21 @@
 # ID Scanner Setup Guide
 
-This guide walks you through setting up the ID scanner project on a Jetson Orin Nano with JetPack 7.2 and Ubuntu 24.04. The script is written for Python 3.12 and uses OpenCV for camera handling, with EasyOCR able to run on the Jetson GPU when a compatible PyTorch/CUDA runtime is installed.
+This guide is for running the scanner with true GPU acceleration on a Jetson device using a JetPack-compatible PyTorch runtime.
 
-## What you need
-- A Jetson device such as a Jetson Orin Nano
-- A working camera connected to the device
+## Requirements
+- Jetson device such as Jetson Orin Nano
+- Working camera
 - Internet access
-- A terminal window
+- Terminal access
 
-## 1. Open the terminal
-Open a terminal on the Jetson.
-
-## 2. Get the project files
-If the project is not already on the Jetson, download it with one of these commands:
-
-If you have GitHub CLI installed:
-
-```bash
-gh repo clone sirtoggle/BarcodeScanner_jetpack72
-cd BarcodeScanner_jetpack72
-```
-
-If you do not have GitHub CLI, use:
-
+## 1. Clone the project
 ```bash
 git clone https://github.com/sirtoggle/BarcodeScanner_jetpack72
 cd BarcodeScanner_jetpack72
 ```
 
-If the project is already on the Jetson, go to the folder instead:
-
-```bash
-cd /path/to/BarcodeScanner_jetpack72
-```
-
-## 3. Create a Python environment (recommended)
-It is a good idea to use a virtual environment so the packages stay isolated.
-
-```bash
-sudo apt update
-sudo apt install -y python3-pip python3-venv
-python3 -m venv ~/idscanner-env
-source ~/idscanner-env/bin/activate
-python -m pip install --upgrade pip
-```
-
-## 4. Install the required packages
-Run the setup script:
-
-```bash
-chmod +x install_requirements.sh
-./install_requirements.sh
-```
-
-If the script is not available, install the packages directly:
-
-```bash
-python -m pip install -r requirements.txt
-```
-
-For true GPU acceleration on Jetson Orin, use a JetPack-compatible PyTorch runtime rather than a generic CUDA wheel. The most reliable approach is to run the project inside NVIDIA's Jetson container stack:
+## 2. Run the Jetson GPU environment
+Use NVIDIA's Jetson container stack so PyTorch runs with the correct JetPack/L4T support:
 
 ```bash
 sudo apt update
@@ -69,79 +25,57 @@ sudo systemctl enable docker
 sudo systemctl start docker
 
 git clone https://github.com/dusty-nv/jetson-containers
+sudo mkdir -p /usr/local/bin
 bash jetson-containers/install.sh
 jetson-containers run $(autotag l4t-pytorch)
 ```
 
-Inside that container, install the project requirements and start the scanner:
+## 3. Install the project dependencies
+After the container starts on the Jetson device, run:
 
 ```bash
 cd /workspace/BarcodeScanner_jetpack72
 python3 -m pip install -r requirements.txt
+```
+
+## 4. Start the scanner
+```bash
 python3 test9.py
 ```
 
-If you still need GPIO support for external hardware, install Jetson GPIO as well:
+On first run, the OCR model may be downloaded automatically.
+
+If you want output files written directly to a USB drive, set the output folder first:
+
+```bash
+export ID_SCANNER_OUTPUT_DIR="/media/<your-user>/<your-usb-name>"
+python3 test9.py
+```
+
+## 5. Use the scanner
+- Place a card or ID in front of the camera.
+- The app will try to detect and read it.
+- Press q in the camera window to quit.
+
+## 6. Optional: GPIO support
+If you need external hardware control, install Jetson GPIO inside the container:
 
 ```bash
 sudo apt update
 sudo apt install -y python3-dev python3-pip
 sudo apt install -y libgpiod-dev
-python -m pip install Jetson.GPIO
+python3 -m pip install Jetson.GPIO
 ```
 
-## 5. Start the ID scanner
-Run the program:
-
-```bash
-python test9.py
-```
-
-On first run it will download the model.
-
-If you want the files to go directly to a USB drive, set the output folder before running:
-
-```bash
-export ID_SCANNER_OUTPUT_DIR="/media/<your-user>/<your-usb-name>"
-python test9.py
-```
-
-You can also set it permanently in your shell profile if you want.
-
-## 6. Use the ID scanner
-- Place a card or ID in front of the camera.
-- The program will try to detect and read it.
-- Press `q` in the camera window to quit.
-
-## 7. If something goes wrong
-If the program does not start:
+## 7. Troubleshooting
+If the app does not start on the Jetson device:
 - Check that the camera is connected.
-- Make sure the virtual environment is active.
-- Make sure you are using the same Python interpreter that installed the packages.
-- Verify OpenCV is available in that interpreter:
+- Confirm you are running inside the Jetson GPU container on that device.
+- Verify that PyTorch can see the GPU:
 
 ```bash
-which python
-python -c "import sys; print(sys.executable)"
-python -c "import cv2; print(cv2.__version__)"
+python3 -c "import torch; print(torch.cuda.is_available())"
 ```
 
-If `cv2` is still missing, reinstall the packages with the same interpreter:
+If that prints False, the container is not using a JetPack-compatible PyTorch runtime for your device.
 
-```bash
-python -m pip install --upgrade pip
-python -m pip install -r requirements.txt
-```
-
-## 8. Notes
-- This setup is intended for a Jetson environment with JetPack 7.2 and Ubuntu 24.04.
-- If PyTorch does not install correctly for your JetPack version, install it from NVIDIA’s Jetson packages separately.
-- For system monitoring and performance checks, tools such as `jtop` can help verify GPU, CPU, and memory usage.
-
-## 9. Helpful commands
-```bash
-ls
-pwd
-python --version
-source ~/idscanner-env/bin/activate
-```
