@@ -1,226 +1,233 @@
 # ID Scanner Setup Guide
 
-This guide is for running the scanner with true GPU acceleration on a Jetson device using a JetPack-compatible PyTorch runtime.
+This is the complete new-unit setup for the GPU-accelerated ID scanner on an
+NVIDIA Jetson Orin Nano. The commands use the current user's home directory, so
+the installation is not tied to a particular username.
 
-## Requirements
-- Jetson device such as Jetson Orin Nano
-- Working camera
-- Internet access
-- Terminal access
+## Before starting
 
-## 1. Clone the project
-```bash
-git clone https://github.com/sirtoggle/BarcodeScanner_jetpack72
-cd BarcodeScanner_jetpack72
-```
+You need:
 
-## 2. Run the Jetson GPU environment
-Use NVIDIA's Jetson container stack so PyTorch runs with the correct JetPack/L4T support:
+- A Jetson Orin Nano with JetPack and the Ubuntu desktop installed
+- A working camera and internet connection
+- A normal desktop user account with terminal access
+- Automatic desktop login enabled if the scanner must start unattended
+
+Use the normal desktop user for this setup. Use `sudo` only on commands where it
+is shown. Do not run Jetson Containers, `run_jetson.sh`, or the boot-service
+installer with `sudo`.
+
+## 1. Install and enable Docker
+
+Run once on a new Jetson:
 
 ```bash
 sudo apt update
 sudo apt install -y docker.io
-sudo usermod -aG docker $USER
-sudo systemctl enable docker
-sudo systemctl start docker
+sudo systemctl enable --now docker
+sudo usermod -aG docker "$USER"
+sudo reboot
 ```
 
-Log out of the Jetson desktop completely and log back in (or reboot) so the
-`docker` group membership takes effect. Then verify Docker works without `sudo`:
+After the reboot, open a terminal and verify Docker works without `sudo`:
 
 ```bash
 docker info
 ```
 
 Do not continue until that command succeeds without a socket permission error.
-Then install Jetson Containers as your normal user:
+
+## 2. Install Jetson Containers
+
+Run as the normal desktop user:
 
 ```bash
+cd "$HOME"
 git clone https://github.com/dusty-nv/jetson-containers
 sudo mkdir -p /usr/local/bin
-bash jetson-containers/install.sh
+bash "$HOME/jetson-containers/install.sh"
 ```
 
-## 3. Build and start the scanner
-Run this from the normal Jetson host terminal, not from inside a container:
+## 3. Install and test the scanner
 
 ```bash
-cd /home/ebh_admin/BarcodeScanner_jetpack72
+cd "$HOME"
+git clone https://github.com/sirtoggle/BarcodeScanner_jetpack72
+cd "$HOME/BarcodeScanner_jetpack72"
+cp -n scanner.env.example scanner.env
 bash run_jetson.sh
 ```
 
-The first launch builds a reusable local image containing all Python and OpenCV
-dependencies. Later launches reuse Docker's cached image and do not require
-`bash install_requirements.sh`. The script mounts the current project at
-`/workspace`, mounts removable media at `/media`, preserves the downloaded OCR
-model on the host, and starts `test9.py` automatically.
+The first launch builds a reusable local image and downloads the OCR model. It
+can take several minutes. Later launches reuse Docker's cached image and OCR
+model; do not run `install_requirements.sh` manually.
 
-The image keeps the base container's JetPack-compatible PyTorch and torchvision
-builds and installs Ubuntu's GStreamer-enabled OpenCV when needed. Do not install
-`opencv-python` or `opencv-python-headless`; those generic packages can replace
-the camera stack.
+The launcher mounts the project at `/workspace` and removable media at `/media`.
+It supplies the camera, display, and JetPack-compatible CUDA runtime to the
+container and starts `test9.py` automatically.
 
-Both the legacy Python 3.8 `l4t-pytorch` image and newer Python images are
-supported. The installer automatically selects compatible NumPy, SciPy,
-scikit-image, and python-bidi releases for the Python version in the container.
+Confirm that:
 
-On first run, the OCR model may be downloaded automatically. It is stored under
-the Jetson user's cache directory so subsequent temporary containers reuse it.
+- The camera opens and fits the screen
+- `SCANNER READY` appears
+- A test card produces the correct ID, card date, and full name
+- A CSV file is created on the USB stick
 
-### Installing updates
+Press `q` to stop this initial manual test.
 
-Press `q` to stop the scanner. If you are at a container prompt, run `exit` first.
-Then update and restart from the normal Jetson host terminal:
+## 4. Start automatically after boot
 
-```bash
-cd /home/ebh_admin/BarcodeScanner_jetpack72
-git pull --ff-only
-bash run_jetson.sh
-```
-
-Do not run `git pull` from `/workspace` inside the container. `/workspace` is the
-host checkout mounted into the temporary container, while Git credentials and
-repository ownership belong to the normal host user.
-
-To open a diagnostic shell instead of immediately starting the scanner:
+The fullscreen camera needs a logged-in graphical desktop. Enable automatic
+desktop login for the scanner's normal user in Ubuntu's user settings. Then run:
 
 ```bash
-bash run_jetson.sh bash
-```
-
-### Start automatically after boot
-
-The fullscreen camera window needs a logged-in graphical desktop. Enable
-automatic desktop login for `ebh_admin` in Ubuntu's user settings, then install
-the per-user startup service from a normal host terminal:
-
-```bash
-cd /home/ebh_admin/BarcodeScanner_jetpack72
+cd "$HOME/BarcodeScanner_jetpack72"
 bash install_boot_service.sh
 sudo reboot
 ```
 
-Do not run the installer with `sudo`. Five seconds after the desktop login, it
-imports the active display settings and starts the scanner. The service retries
-automatically if Docker, the camera, or the graphical session is not ready yet,
-and restarts the scanner if it exits unexpectedly.
-
-Settings exported in a terminal do not survive reboot. Put persistent values in
-`scanner.env`, which the installer creates from `scanner.env.example`. For
-example:
-
-```bash
-nano /home/ebh_admin/BarcodeScanner_jetpack72/scanner.env
-```
+Run `install_boot_service.sh` without `sudo`. Five seconds after automatic
+desktop login, it imports the display session and starts the scanner. The kiosk
+service retries if Docker, the desktop, or the camera is temporarily unavailable
+and restarts the scanner ten seconds after it exits.
 
 Useful service commands:
 
 ```bash
 systemctl --user status barcode-scanner.service
 systemctl --user stop barcode-scanner.service
-bash start_scanner_on_login.sh
+bash "$HOME/BarcodeScanner_jetpack72/start_scanner_on_login.sh"
 journalctl --user -u barcode-scanner.service -f
 ```
 
-Because this is a kiosk service, pressing `q` causes it to restart after ten
-seconds. Use `systemctl --user stop barcode-scanner.service` when maintenance is
-required. To remove boot startup entirely:
+Because the boot service treats the scanner as a kiosk, pressing `q` causes it
+to restart. Use `systemctl --user stop barcode-scanner.service` for maintenance.
+To remove automatic startup:
 
 ```bash
+cd "$HOME/BarcodeScanner_jetpack72"
 bash install_boot_service.sh --remove
 ```
 
-If you want output files written directly to a USB drive, set the output folder first:
+## 5. Persistent settings
 
-```bash
-export ID_SCANNER_OUTPUT_DIR="/media/<your-user>/<your-usb-name>"
-bash run_jetson.sh
+Settings that must survive reboot belong in:
+
+```text
+$HOME/BarcodeScanner_jetpack72/scanner.env
 ```
 
-The output mount is rechecked before every confirmed scan. You can safely unmount
-the old stick and insert a blank replacement while the scanner remains running;
-the next scan will use the newly mounted stick even if its label and mount path
-changed. Avoid presenting a card during the brief interval when no stick is
-mounted, because the scanner will use its local fallback folder to prevent data
-loss.
-
-Each CSV row contains the detected ID, the scanner timestamp, the printed card
-date, and the full name. Date and name columns are blank when they are not
-detected confidently. Dates whose `/` separators are misread as `7` are
-validated as calendar dates and excluded from ID selection.
-
-Name OCR runs only once after the numeric ID is confirmed, so it does not slow
-the live detection loop. It requires a multi-word name and removes common card
-labels and organization terms. Single-word logos are ignored. `Wynn Rewards`
-and `Encore Boston Harbor` are always blocked. To block additional branding,
-list distinctive logo names separated by commas:
+The file is created from `scanner.env.example` and is intentionally excluded
+from Git, so updates do not overwrite unit-specific settings. Edit it with:
 
 ```bash
-export ID_SCANNER_LOGO_WORDS='ACME,WAREHOUSE'
-bash run_jetson.sh
+nano "$HOME/BarcodeScanner_jetpack72/scanner.env"
 ```
 
-For the most reliable ID selection, configure the exact number of digits printed
-on your cards. For example, for an eight-digit ID:
+Example:
 
 ```bash
-export ID_EXPECTED_LENGTH=8
-bash run_jetson.sh
+ID_EXPECTED_LENGTH=8
+ID_PATTERN='12[0-9]{6}'
+ID_SCANNER_LOGO_WORDS='ADDITIONAL LOGO,ANOTHER BRAND'
+ID_SCANNER_FULLSCREEN=true
 ```
 
-If IDs also have a known prefix or format, you can require it with a full regular
-expression. This example accepts eight-digit IDs beginning with `12`:
+`Wynn Rewards` and `Encore Boston Harbor` are blocked as names by default.
+Values in `ID_SCANNER_LOGO_WORDS` add more unit-specific branding exclusions.
 
-```bash
-export ID_PATTERN='12[0-9]{6}'
-bash run_jetson.sh
-```
-
-Useful optional tuning settings:
+Useful optional settings:
 
 | Setting | Default | Purpose |
 | --- | ---: | --- |
 | `DETECTION_MAX_WIDTH` | `960` | Lower values reduce CPU load; raise it if small cards are missed. |
 | `DISPLAY_MAX_WIDTH` | `960` | Safe fallback width; fullscreen geometry is chosen by the desktop. |
-| `OCR_INTERVAL_SECONDS` | `0.18` | Time between OCR attempts while a card is visible. |
-| `OCR_MIN_CONFIDENCE` | `0.40` | Rejects uncertain OCR readings. |
+| `OCR_INTERVAL_SECONDS` | `0.18` | Time between ID OCR attempts. |
+| `OCR_MIN_CONFIDENCE` | `0.40` | Rejects uncertain ID and date readings. |
 | `NAME_MIN_CONFIDENCE` | `0.45` | Rejects uncertain full-name readings. |
-| `ID_SCANNER_LOGO_WORDS` | empty | Comma-separated logo words that must never be saved as a name. |
-| `CONFIRMATION_MATCHES` | `3` | Matching recent readings required before saving. |
-| `ID_SCANNER_SAVE_IMAGES` | `true` | Set to `false` if card images should not be retained. |
+| `CONFIRMATION_MATCHES` | `3` | Matching ID readings required before saving. |
+| `ID_SCANNER_SAVE_IMAGES` | `true` | Set to `false` to disable card-image retention. |
 | `ID_SCANNER_FULLSCREEN` | `true` | Opens the live video as a borderless fullscreen window. |
+| `ID_SCANNER_LOGO_WORDS` | empty | Additional comma-separated logo names to exclude. |
 
-## 4. Use the scanner
-- Place a card or ID in front of the camera.
-- The app will try to detect and read it.
-- Press q in the camera window to quit.
-
-## 5. Optional: GPIO support
-If you need external hardware control, install Jetson GPIO inside the container:
+After changing `scanner.env`, restart the service:
 
 ```bash
-sudo apt update
-sudo apt install -y python3-dev python3-pip
-sudo apt install -y libgpiod-dev
-python3 -m pip install Jetson.GPIO
+systemctl --user restart barcode-scanner.service
 ```
 
-## 6. Troubleshooting
-If the app does not start on the Jetson device:
-- Check that the camera is connected.
-- Confirm you are running inside the Jetson GPU container on that device.
-- Verify that PyTorch can see the GPU:
+## 6. Daily USB-stick operation
+
+The scanner automatically locates mounted removable media and rechecks it before
+every confirmed scan. The old USB stick can be safely unmounted and replaced by
+a blank one while the scanner remains open. Avoid presenting a card during the
+brief interval when no stick is mounted; the scanner uses a local fallback
+folder during that interval to prevent data loss.
+
+Each CSV row contains four columns in this order:
+
+1. Detected ID
+2. Scanner timestamp
+3. Printed card date
+4. Full name
+
+The date or name is blank when it was not detected confidently. Validated dates
+are excluded from ID selection even when OCR reads `/` as `7`. Name OCR runs only
+after ID confirmation to preserve live performance. It ignores common labels,
+organization terms, single-word logos, and the configured logo names.
+
+## 7. Install updates
+
+Do not run `git pull` from `/workspace` inside the temporary container. Stop the
+service and update the host checkout as the normal user:
+
+```bash
+systemctl --user stop barcode-scanner.service
+cd "$HOME/BarcodeScanner_jetpack72"
+git pull --ff-only
+bash install_boot_service.sh
+bash start_scanner_on_login.sh
+```
+
+Docker rebuilds only when dependency files change. Normal Python-code updates
+start quickly using the existing image.
+
+## 8. Troubleshooting
+
+### Docker permission denied
+
+The login session has not picked up membership in the `docker` group. Reboot,
+then run `docker info` without `sudo`. Do not run the launcher with `sudo`.
+Messages such as `groups: cannot find name for group ID ...` inside the container
+are not a Docker permission fix.
+
+### View boot-service errors
+
+```bash
+journalctl --user -u barcode-scanner.service -n 100 --no-pager
+```
+
+### Open a diagnostic container shell
+
+Stop the boot service first, then open the prepared container:
+
+```bash
+systemctl --user stop barcode-scanner.service
+cd "$HOME/BarcodeScanner_jetpack72"
+bash run_jetson.sh bash
+```
+
+Inside the container, verify CUDA:
 
 ```bash
 python3 -c "import torch; print(torch.cuda.is_available())"
 ```
 
-If that prints False, the container is not using a JetPack-compatible PyTorch runtime for your device.
+It must print `True`. Run `exit` to return to the Jetson host.
 
-If `jetson-containers run` reports permission denied for `/var/run/docker.sock`,
-the current login has not picked up its `docker` group membership. Log out and
-back in or reboot, run `docker info` without `sudo`, and only then retry Jetson
-Containers. Avoid running the helper with `sudo`; messages such as `groups:
-cannot find name for group ID ...` come from host group IDs that have no matching
-name inside the container and are not a fix for Docker socket access.
+### Scanner does not open
 
+- Confirm the camera is connected.
+- Confirm `docker info` works without `sudo`.
+- Check the service log shown above.
+- Confirm automatic desktop login completed and the Ubuntu desktop is visible.
