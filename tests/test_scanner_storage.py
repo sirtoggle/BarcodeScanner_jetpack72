@@ -23,11 +23,12 @@ class ScannerStorageTests(unittest.TestCase):
                 "123456",
                 "2026-07-13_12-00-00",
                 "07/13/2026",
+                "JANE SMITH",
             )
 
             with open(filename, newline="", encoding="utf-8") as input_file:
                 self.assertEqual(
-                    [["123456", "2026-07-13_12-00-00", "07/13/2026"]],
+                    [["123456", "2026-07-13_12-00-00", "07/13/2026", "JANE SMITH"]],
                     list(csv.reader(input_file)),
                 )
 

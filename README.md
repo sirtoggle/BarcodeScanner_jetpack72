@@ -102,10 +102,20 @@ changed. Avoid presenting a card during the brief interval when no stick is
 mounted, because the scanner will use its local fallback folder to prevent data
 loss.
 
-Each CSV row contains the detected ID, the scanner timestamp, and the printed
-card date. The third column is blank when no valid printed date is detected.
-Dates whose `/` separators are misread as `7` are validated as calendar dates
-and excluded from ID selection.
+Each CSV row contains the detected ID, the scanner timestamp, the printed card
+date, and the full name. Date and name columns are blank when they are not
+detected confidently. Dates whose `/` separators are misread as `7` are
+validated as calendar dates and excluded from ID selection.
+
+Name OCR runs only once after the numeric ID is confirmed, so it does not slow
+the live detection loop. It requires a multi-word name and removes common card
+labels and organization terms. Single-word logos are ignored. To block branding
+that is unique to your cards, list distinctive logo words separated by commas:
+
+```bash
+export ID_SCANNER_LOGO_WORDS='ACME,WAREHOUSE'
+bash run_jetson.sh
+```
 
 For the most reliable ID selection, configure the exact number of digits printed
 on your cards. For example, for an eight-digit ID:
@@ -120,6 +130,7 @@ expression. This example accepts eight-digit IDs beginning with `12`:
 
 ```bash
 export ID_PATTERN='12[0-9]{6}'
+bash run_jetson.sh
 ```
 
 Useful optional tuning settings:
@@ -130,6 +141,8 @@ Useful optional tuning settings:
 | `DISPLAY_MAX_WIDTH` | `960` | Safe fallback width; fullscreen geometry is chosen by the desktop. |
 | `OCR_INTERVAL_SECONDS` | `0.18` | Time between OCR attempts while a card is visible. |
 | `OCR_MIN_CONFIDENCE` | `0.40` | Rejects uncertain OCR readings. |
+| `NAME_MIN_CONFIDENCE` | `0.45` | Rejects uncertain full-name readings. |
+| `ID_SCANNER_LOGO_WORDS` | empty | Comma-separated logo words that must never be saved as a name. |
 | `CONFIRMATION_MATCHES` | `3` | Matching recent readings required before saving. |
 | `ID_SCANNER_SAVE_IMAGES` | `true` | Set to `false` if card images should not be retained. |
 | `ID_SCANNER_FULLSCREEN` | `true` | Opens the live video as a borderless fullscreen window. |

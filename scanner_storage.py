@@ -29,6 +29,7 @@ def write_scan_row(
     id_number: str,
     timestamp: str,
     card_date: str = "",
+    full_name: str = "",
 ) -> str:
     date_str = datetime.now().strftime("%m-%d-%Y")
     filename = os.path.join(output_dir, f"scans{date_str}.csv")
@@ -36,7 +37,7 @@ def write_scan_row(
     with open(filename, "a", newline="", encoding="utf-8") as output_file:
         # Preserve the original ID and scan-time column positions. Card date is
         # blank when OCR did not confidently detect a valid printed date.
-        csv.writer(output_file).writerow([id_number, timestamp, card_date])
+        csv.writer(output_file).writerow([id_number, timestamp, card_date, full_name])
         output_file.flush()
         os.fsync(output_file.fileno())
     set_private_permissions(filename)

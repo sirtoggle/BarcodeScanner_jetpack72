@@ -10,6 +10,41 @@ from typing import Any, Iterable, Optional, Pattern, Sequence, Tuple
 
 OcrResult = Tuple[Any, str, Any]
 
+_NON_NAME_WORDS = frozenset(
+    {
+        "ACCESS",
+        "ASSOCIATION",
+        "CARD",
+        "CARDHOLDER",
+        "CLUB",
+        "COLLEGE",
+        "COMPANY",
+        "CORP",
+        "CORPORATION",
+        "DATE",
+        "DEPARTMENT",
+        "DOB",
+        "EMPLOYEE",
+        "EXPIRES",
+        "EXPIRATION",
+        "HEALTH",
+        "HOSPITAL",
+        "IDENTIFICATION",
+        "INC",
+        "INDUSTRIES",
+        "LLC",
+        "MEMBER",
+        "NAME",
+        "ORGANIZATION",
+        "SCHOOL",
+        "STUDENT",
+        "SYSTEM",
+        "UNIVERSITY",
+        "VALID",
+        "VISITOR",
+    }
+)
+
 
 def _normalize_card_date(month_text: str, day_text: str, year_text: str) -> Optional[str]:
     try:
@@ -98,6 +133,112 @@ def extract_card_date(
             candidates.append((confidence, candidate))
 
     return max(candidates)[1] if candidates else None
+
+
+def extract_full_name(
+    results: Iterable[OcrResult],
+    *,
+    min_confidence: float = 0.45,
+    logo_words: Iterable[str] = (),
+) -> Optional[str]:
+    """Choose a conservative multi-word name while rejecting labels and logos.
+
+    Single-word readings are intentionally ignored. Custom logo words reject an
+    entire OCR region, while generic field/organization words are removed before
+    deciding whether at least a plausible first and last name remain.
+    """
+    blocked_logo_words = {
+        token.upper()
+        for value in logo_words
+        for token in re.findall(r"[A-Za-z]+", value)
+    }
+    candidates: list[tuple[float, int, str]] = []
+    text_regions: list[tuple[float, str]] = []
+    positioned_regions: list[tuple[float, float, float, float, str]] = []
+
+    for result in results:
+        if len(result) < 3:
+            continue
+        try:
+            confidence = float(result[2])
+        except (TypeError, ValueError):
+            continue
+        if confidence < min_confidence:
+            continue
+
+        text = str(result[1])
+        text_regions.append((confidence, text))
+        try:
+            points = list(result[0])
+            x_values = [float(point[0]) for point in points]
+            y_values = [float(point[1]) for point in points]
+            height = max(y_values) - min(y_values)
+            if height > 0:
+                positioned_regions.append(
+                    (
+                        sum(y_values) / len(y_values),
+                        min(x_values),
+                        height,
+                        confidence,
+                        text,
+                    )
+                )
+        except (TypeError, ValueError, IndexError):
+            pass
+
+    # EasyOCR can return first and last names as separate boxes. Join boxes on
+    # the same visual line from left to right before applying the same strict
+    # name/logo filters.
+    line_groups: list[list[tuple[float, float, float, float, str]]] = []
+    for region in sorted(positioned_regions):
+        if not line_groups:
+            line_groups.append([region])
+            continue
+        current_group = line_groups[-1]
+        group_center = sum(item[0] for item in current_group) / len(current_group)
+        tolerance = max([region[2], *(item[2] for item in current_group)]) * 0.65
+        if abs(region[0] - group_center) <= tolerance:
+            current_group.append(region)
+        else:
+            line_groups.append([region])
+
+    for group in line_groups:
+        if len(group) < 2:
+            continue
+        ordered_group = sorted(group, key=lambda item: item[1])
+        text_regions.append(
+            (
+                min(item[3] for item in ordered_group),
+                " ".join(item[4] for item in ordered_group),
+            )
+        )
+
+    for confidence, text in text_regions:
+
+        raw_tokens = [
+            token.upper()
+            for token in re.findall(r"[A-Za-z]+(?:['-][A-Za-z]+)*", text)
+        ]
+        if any(token in blocked_logo_words for token in raw_tokens):
+            continue
+
+        tokens = [token for token in raw_tokens if token not in _NON_NAME_WORDS]
+        if not 2 <= len(tokens) <= 5:
+            continue
+        if len(tokens[0].replace("'", "").replace("-", "")) < 2:
+            continue
+        if len(tokens[-1].replace("'", "").replace("-", "")) < 2:
+            continue
+        if any(len(token.replace("'", "").replace("-", "")) < 1 for token in tokens):
+            continue
+
+        name = " ".join(tokens)
+        letter_count = sum(character.isalpha() for character in name)
+        if letter_count < 4:
+            continue
+        candidates.append((confidence, letter_count, name))
+
+    return max(candidates)[2] if candidates else None
 
 
 def path_is_on_mount(path: str, mounts: Sequence[str]) -> bool:

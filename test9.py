@@ -10,6 +10,7 @@ from scanner_core import (
     ConsensusTracker,
     compile_id_pattern,
     extract_card_date,
+    extract_full_name,
     extract_id,
     is_gpu_available,
     path_is_on_mount,
@@ -109,6 +110,12 @@ DISPLAY_MAX_WIDTH = env_int("DISPLAY_MAX_WIDTH", 960, minimum=320)
 OCR_INTERVAL_SECONDS = env_float("OCR_INTERVAL_SECONDS", 0.18, minimum=0.05)
 OCR_CANVAS_SIZE = env_int("OCR_CANVAS_SIZE", 1280, minimum=320)
 OCR_MIN_CONFIDENCE = env_float("OCR_MIN_CONFIDENCE", 0.40, minimum=0.0)
+NAME_MIN_CONFIDENCE = env_float("NAME_MIN_CONFIDENCE", 0.45, minimum=0.0)
+LOGO_WORDS = tuple(
+    value.strip()
+    for value in os.getenv("ID_SCANNER_LOGO_WORDS", "").replace(";", ",").split(",")
+    if value.strip()
+)
 ID_MIN_LENGTH = env_int("ID_MIN_LENGTH", 6, minimum=1)
 ID_MAX_LENGTH = env_int("ID_MAX_LENGTH", 20, minimum=ID_MIN_LENGTH)
 ID_EXPECTED_LENGTH = env_int("ID_EXPECTED_LENGTH", 0, minimum=0) or None
@@ -205,17 +212,27 @@ def find_card(frame: np.ndarray) -> Optional[Tuple[int, int, int, int]]:
 # -----------------------------
 # SAVE FUNCTIONS
 # -----------------------------
-def save_scan(id_number: str, timestamp: str, card_date: str, output_dir: str) -> str:
+def save_scan(
+    id_number: str,
+    timestamp: str,
+    card_date: str,
+    full_name: str,
+    output_dir: str,
+) -> str:
     try:
-        write_scan_row(output_dir, id_number, timestamp, card_date)
-        print(f"SAVED: {id_number} | {timestamp} | card date: {card_date or 'not detected'}")
+        write_scan_row(output_dir, id_number, timestamp, card_date, full_name)
+        print(
+            f"SAVED: {id_number} | {timestamp} | "
+            f"card date: {card_date or 'not detected'} | "
+            f"name: {full_name or 'not detected'}"
+        )
         return output_dir
     except OSError as exc:
         fallback_dir = fallback_output_dir(os.getcwd())
         if os.path.realpath(output_dir) == os.path.realpath(fallback_dir):
             raise RuntimeError(f"Unable to save scan data to {output_dir}: {exc}") from exc
 
-        filename = write_scan_row(fallback_dir, id_number, timestamp, card_date)
+        filename = write_scan_row(fallback_dir, id_number, timestamp, card_date, full_name)
         print(f"WARNING: Output failed at {output_dir}; saved CSV to {filename}: {exc}")
         return fallback_dir
 
@@ -639,6 +656,28 @@ def main() -> None:
                         last_saved = scanned_ids.get(confirmed_id)
 
                         if last_saved is None:
+                            try:
+                                name_results = reader.readtext(
+                                    roi,
+                                    decoder="greedy",
+                                    beamWidth=1,
+                                    batch_size=1,
+                                    workers=0,
+                                    allowlist="ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz-' ",
+                                    detail=1,
+                                    paragraph=False,
+                                    canvas_size=OCR_CANVAS_SIZE,
+                                    mag_ratio=1.0,
+                                )
+                                full_name = extract_full_name(
+                                    name_results,
+                                    min_confidence=NAME_MIN_CONFIDENCE,
+                                    logo_words=LOGO_WORDS,
+                                ) or ""
+                            except Exception as exc:
+                                print(f"WARNING: Name OCR failed for this card: {exc}")
+                                full_name = ""
+
                             output_dir = refresh_output_dir(output_dir)
                             timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
                             recent_dates = [value for value in date_tracker.readings if value]
@@ -649,6 +688,7 @@ def main() -> None:
                                 confirmed_id,
                                 timestamp,
                                 saved_card_date,
+                                full_name,
                                 output_dir,
                             )
                             output_dir = save_image(roi, timestamp, output_dir)

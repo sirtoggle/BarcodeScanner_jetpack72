@@ -4,6 +4,7 @@ import unittest
 from scanner_core import (
     ConsensusTracker,
     extract_card_date,
+    extract_full_name,
     extract_id,
     path_is_on_mount,
     scale_box,
@@ -96,6 +97,49 @@ class ExtractCardDateTests(unittest.TestCase):
 
     def test_rejects_invalid_calendar_date(self) -> None:
         self.assertIsNone(extract_card_date([(None, "1374072026", 0.99)]))
+
+
+class ExtractFullNameTests(unittest.TestCase):
+    def test_extracts_name_and_removes_field_label(self) -> None:
+        self.assertEqual(
+            "JANE Q SMITH",
+            extract_full_name([(None, "NAME JANE Q SMITH", 0.92)]),
+        )
+
+    def test_ignores_single_word_logo(self) -> None:
+        results = [
+            (None, "MEGACORP", 0.99),
+            (None, "JOHN DOE", 0.82),
+        ]
+
+        self.assertEqual("JOHN DOE", extract_full_name(results))
+
+    def test_removes_generic_organization_words(self) -> None:
+        results = [
+            (None, "ACME HEALTH SYSTEM", 0.99),
+            (None, "JOHN DOE", 0.80),
+        ]
+
+        self.assertEqual("JOHN DOE", extract_full_name(results))
+
+    def test_custom_logo_words_reject_entire_region(self) -> None:
+        results = [
+            (None, "EAST BAY HOLDINGS", 0.99),
+            (None, "JANE SMITH", 0.81),
+        ]
+
+        self.assertEqual(
+            "JANE SMITH",
+            extract_full_name(results, logo_words=("EAST", "BAY")),
+        )
+
+    def test_joins_separate_name_boxes_on_the_same_line(self) -> None:
+        results = [
+            ([[10, 20], [90, 20], [90, 45], [10, 45]], "JANE", 0.91),
+            ([[110, 21], [210, 21], [210, 46], [110, 46]], "SMITH", 0.89),
+        ]
+
+        self.assertEqual("JANE SMITH", extract_full_name(results))
 
 
 class ConsensusTrackerTests(unittest.TestCase):

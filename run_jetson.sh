@@ -58,6 +58,7 @@ exec jetson-containers run \
   -e OCR_INTERVAL_SECONDS \
   -e OCR_CANVAS_SIZE \
   -e OCR_MIN_CONFIDENCE \
+  -e NAME_MIN_CONFIDENCE \
   -e ID_MIN_LENGTH \
   -e ID_MAX_LENGTH \
   -e ID_EXPECTED_LENGTH \
@@ -68,4 +69,5 @@ exec jetson-containers run \
   -e ID_SCANNER_SAVE_IMAGES \
   -e ID_SCANNER_DISABLE_BLANKING \
   -e ID_SCANNER_FULLSCREEN \
+  -e ID_SCANNER_LOGO_WORDS \
   "$IMAGE_NAME" "$@"
