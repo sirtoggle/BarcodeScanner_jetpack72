@@ -62,6 +62,10 @@ GStreamer-enabled `python3-opencv` package. Do not install `opencv-python` or
 stack. OpenCV performs the lightweight, downscaled card detection on the CPU,
 while EasyOCR runs its inference on the Jetson GPU.
 
+Both the legacy Python 3.8 `l4t-pytorch` image and newer Python images are
+supported. The installer automatically selects compatible NumPy, SciPy,
+scikit-image, and python-bidi releases for the Python version in the container.
+
 ## 4. Start the scanner
 ```bash
 python3 test9.py

@@ -1,9 +1,16 @@
 # EasyOCR support packages that are not supplied by the Jetson PyTorch image.
 # OpenCV, torch, and torchvision must come from the JetPack-compatible image.
-scipy>=1.11,<2
+# The legacy l4t-pytorch image uses Python 3.8.  Keep its last compatible ARM64
+# wheels while allowing newer containers to use the newer package families.
+numpy>=1.21.1,<1.25; python_version < "3.9"
+numpy>=1.26,<2; python_version >= "3.9"
+scipy>=1.9,<1.11; python_version < "3.9"
+scipy>=1.11,<2; python_version >= "3.9"
 Pillow>=10,<13
-scikit-image>=0.22,<1
-python-bidi>=0.6,<1
+scikit-image>=0.21,<0.22; python_version < "3.9"
+scikit-image>=0.22,<1; python_version >= "3.9"
+python-bidi>=0.4.2,<0.7; python_version < "3.9"
+python-bidi>=0.6,<1; python_version >= "3.9"
 PyYAML>=6,<7
 Shapely>=2,<3
 pyclipper>=1.3,<2

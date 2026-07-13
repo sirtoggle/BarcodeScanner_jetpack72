@@ -6,6 +6,20 @@ cd "$SCRIPT_DIR"
 
 echo "Installing Python packages for this project..."
 
+python3 - <<'PY'
+import platform
+import sys
+
+if sys.version_info < (3, 8):
+    raise SystemExit(
+        f"ERROR: Python {platform.python_version()} is too old. "
+        "Use a Jetson PyTorch container with Python 3.8 or newer."
+    )
+
+profile = "Jetson Python 3.8 compatibility" if sys.version_info < (3, 9) else "modern Python"
+print(f"Selected dependency profile: {profile} ({platform.machine()})")
+PY
+
 install_system_opencv() {
   local use_sudo=0
 
