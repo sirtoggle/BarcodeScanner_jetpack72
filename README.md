@@ -23,25 +23,44 @@ sudo apt install -y docker.io
 sudo usermod -aG docker $USER
 sudo systemctl enable docker
 sudo systemctl start docker
+```
 
+Log out of the Jetson desktop completely and log back in (or reboot) so the
+`docker` group membership takes effect. Then verify Docker works without `sudo`:
+
+```bash
+docker info
+```
+
+Do not continue until that command succeeds without a socket permission error.
+Then install and start Jetson Containers as your normal user:
+
+```bash
 git clone https://github.com/dusty-nv/jetson-containers
 sudo mkdir -p /usr/local/bin
 bash jetson-containers/install.sh
-jetson-containers run $(autotag l4t-pytorch)
+cd /home/ebh_admin/BarcodeScanner_jetpack72
+jetson-containers run -v "$PWD:/workspace" -v "/media:/media" $(autotag l4t-pytorch)
 ```
 
 ## 3. Install the project dependencies
 After the container starts on the Jetson device, run:
 
 ```bash
-cd /workspace/BarcodeScanner_jetpack72
+cd /workspace
 bash install_requirements.sh
 ```
 
-The installer deliberately keeps the container's JetPack-compatible OpenCV,
-PyTorch, and torchvision builds. Do not install `opencv-python` or
-`opencv-python-headless` into this container; those generic packages can replace
-the accelerated camera stack.
+The launch command explicitly mounts the project at `/workspace` and the Jetson's
+removable-media directory at `/media`, so the scanner can access both its code
+and the daily USB stick.
+
+The installer keeps the container's JetPack-compatible PyTorch and torchvision
+builds. If the container does not include `cv2`, it installs Ubuntu's
+GStreamer-enabled `python3-opencv` package. Do not install `opencv-python` or
+`opencv-python-headless` with pip; those generic packages can replace the camera
+stack. OpenCV performs the lightweight, downscaled card detection on the CPU,
+while EasyOCR runs its inference on the Jetson GPU.
 
 ## 4. Start the scanner
 ```bash
@@ -115,4 +134,11 @@ python3 -c "import torch; print(torch.cuda.is_available())"
 ```
 
 If that prints False, the container is not using a JetPack-compatible PyTorch runtime for your device.
+
+If `jetson-containers run` reports permission denied for `/var/run/docker.sock`,
+the current login has not picked up its `docker` group membership. Log out and
+back in or reboot, run `docker info` without `sudo`, and only then retry Jetson
+Containers. Avoid running the helper with `sudo`; messages such as `groups:
+cannot find name for group ID ...` come from host group IDs that have no matching
+name inside the container and are not a fix for Docker socket access.
 

@@ -1,6 +1,6 @@
 # EasyOCR support packages that are not supplied by the Jetson PyTorch image.
 # OpenCV, torch, and torchvision must come from the JetPack-compatible image.
-numpy>=1.26,<3
+numpy>=1.26,<2
 scipy>=1.11,<2
 Pillow>=10,<13
 scikit-image>=0.22,<1
