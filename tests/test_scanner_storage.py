@@ -2,6 +2,7 @@ import csv
 import os
 import tempfile
 import unittest
+from unittest import mock
 
 from scanner_storage import write_image_file, write_scan_row
 
@@ -18,13 +19,16 @@ class ScannerStorageTests(unittest.TestCase):
 
     def test_csv_row_is_flushed_to_disk(self) -> None:
         with tempfile.TemporaryDirectory() as output_dir:
-            filename = write_scan_row(
-                output_dir,
-                "123456",
-                "2026-07-13_12-00-00",
-                "07/13/2026",
-                "JANE SMITH",
-            )
+            with mock.patch("scanner_storage.os.fsync", wraps=os.fsync) as fsync:
+                filename = write_scan_row(
+                    output_dir,
+                    "123456",
+                    "2026-07-13_12-00-00",
+                    "07/13/2026",
+                    "JANE SMITH",
+                )
+
+            self.assertGreaterEqual(fsync.call_count, 1)
 
             with open(filename, newline="", encoding="utf-8") as input_file:
                 self.assertEqual(
@@ -51,12 +55,15 @@ class ScannerStorageTests(unittest.TestCase):
             return True
 
         with tempfile.TemporaryDirectory() as output_dir:
-            filename = write_image_file(
-                output_dir,
-                object(),
-                "2026-07-13_12-00-00",
-                successful_writer,
-            )
+            with mock.patch("scanner_storage.os.fsync", wraps=os.fsync) as fsync:
+                filename = write_image_file(
+                    output_dir,
+                    object(),
+                    "2026-07-13_12-00-00",
+                    successful_writer,
+                )
+
+            self.assertGreaterEqual(fsync.call_count, 1)
 
             with open(filename, "rb") as input_file:
                 self.assertEqual(b"jpeg", input_file.read())

@@ -5,6 +5,7 @@ import re
 import warnings
 from collections import deque
 from datetime import datetime
+from pathlib import Path
 from typing import Any, Iterable, Optional, Pattern, Sequence, Tuple
 
 
@@ -44,6 +45,27 @@ _NON_NAME_WORDS = frozenset(
         "VISITOR",
     }
 )
+
+
+def load_logo_words(path: str) -> Tuple[str, ...]:
+    """Load logo phrases from a UTF-8 text file, one phrase per line."""
+    source = Path(path)
+    try:
+        lines = source.read_text(encoding="utf-8-sig").splitlines()
+    except OSError as exc:
+        raise RuntimeError(f"Unable to read logo-word file: {source}") from exc
+
+    phrases = []
+    seen = set()
+    for line in lines:
+        phrase = line.strip()
+        if not phrase or phrase.startswith("#"):
+            continue
+        normalized = phrase.casefold()
+        if normalized not in seen:
+            seen.add(normalized)
+            phrases.append(phrase)
+    return tuple(phrases)
 
 
 def _normalize_card_date(month_text: str, day_text: str, year_text: str) -> Optional[str]:

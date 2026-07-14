@@ -1,0 +1,5 @@
+# Add one logo or organization phrase per line.
+# Blank lines and lines beginning with # are ignored.
+
+Wynn Rewards
+Encore Boston Harbor

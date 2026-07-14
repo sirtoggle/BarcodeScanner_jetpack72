@@ -1,11 +1,14 @@
 import re
+import tempfile
 import unittest
+from pathlib import Path
 
 from scanner_core import (
     ConsensusTracker,
     extract_card_date,
     extract_full_name,
     extract_id,
+    load_logo_words,
     path_is_on_mount,
     scale_box,
 )
@@ -140,6 +143,21 @@ class ExtractFullNameTests(unittest.TestCase):
         ]
 
         self.assertEqual("JANE SMITH", extract_full_name(results))
+
+
+class LoadLogoWordsTests(unittest.TestCase):
+    def test_loads_phrases_and_ignores_comments_blanks_and_duplicates(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "logos.txt"
+            path.write_text(
+                "# Card branding\n\nWynn Rewards\nEncore Boston Harbor\nwynn rewards\n",
+                encoding="utf-8",
+            )
+
+            self.assertEqual(
+                ("Wynn Rewards", "Encore Boston Harbor"),
+                load_logo_words(str(path)),
+            )
 
 
 class ConsensusTrackerTests(unittest.TestCase):

@@ -23,7 +23,7 @@ Run once on a new Jetson:
 
 ```bash
 sudo apt update
-sudo apt install -y docker.io
+sudo apt install -y docker.io xinput
 sudo systemctl enable --now docker
 sudo usermod -aG docker "$USER"
 sudo reboot
@@ -63,8 +63,10 @@ can take several minutes. Later launches reuse Docker's cached image and OCR
 model; do not run `install_requirements.sh` manually.
 
 The launcher mounts the project at `/workspace` and removable media at `/media`.
-It supplies the camera, display, and JetPack-compatible CUDA runtime to the
-container and starts `test9.py` automatically.
+The removable-media mount uses live propagation so USB sticks inserted after
+the scanner starts are visible without recreating the container. The launcher
+also supplies the camera, display, and JetPack-compatible CUDA runtime and
+starts `test9.py` automatically.
 
 Confirm that:
 
@@ -129,12 +131,20 @@ Example:
 ```bash
 ID_EXPECTED_LENGTH=8
 ID_PATTERN='12[0-9]{6}'
-ID_SCANNER_LOGO_WORDS='ADDITIONAL LOGO,ANOTHER BRAND'
 ID_SCANNER_FULLSCREEN=true
+ID_SCANNER_DISABLE_TOUCH=true
 ```
 
-`Wynn Rewards` and `Encore Boston Harbor` are blocked as names by default.
-Values in `ID_SCANNER_LOGO_WORDS` add more unit-specific branding exclusions.
+Logo phrases that must not be mistaken for a person's name are kept in:
+
+```text
+$HOME/BarcodeScanner_jetpack72/logo_words.txt
+```
+
+Add one logo phrase per line. Blank lines and lines beginning with `#` are
+ignored. The included file starts with `Wynn Rewards` and
+`Encore Boston Harbor`. Because the file is tracked by Git, you can update it
+once, commit it, and pull the same list onto every scanner.
 
 Useful optional settings:
 
@@ -148,21 +158,53 @@ Useful optional settings:
 | `CONFIRMATION_MATCHES` | `3` | Matching ID readings required before saving. |
 | `ID_SCANNER_SAVE_IMAGES` | `true` | Set to `false` to disable card-image retention. |
 | `ID_SCANNER_FULLSCREEN` | `true` | Opens the live video as a borderless fullscreen window. |
-| `ID_SCANNER_LOGO_WORDS` | empty | Additional comma-separated logo names to exclude. |
+| `ID_SCANNER_DISABLE_TOUCH` | `true` | Disables matching touchscreens when the scanner starts. Set to `false` to retain touch input. |
+| `ID_SCANNER_TOUCH_MATCH` | common touchscreen names | Optional case-insensitive device-name pattern for an unusual monitor. |
 
-After changing `scanner.env`, restart the service:
+After changing `scanner.env` or `logo_words.txt`, restart the service:
 
 ```bash
 systemctl --user restart barcode-scanner.service
 ```
 
+Touch input is disabled on the Jetson host at each scanner start. USB mice and
+keyboards remain usable. Existing installations only need to install `xinput`
+once; setting `ID_SCANNER_DISABLE_TOUCH=false` in `scanner.env` restores touch:
+
+```bash
+sudo apt install -y xinput
+```
+
+If the service log says that no touchscreen matched, list the device names:
+
+```bash
+xinput list --name-only
+```
+
+Then put a distinctive part of the touchscreen name in `scanner.env`, for
+example `ID_SCANNER_TOUCH_MATCH='ILITEK|Multi-Touch'`, and restart the service.
+
 ## 6. Daily USB-stick operation
 
 The scanner automatically locates mounted removable media and rechecks it before
-every confirmed scan. The old USB stick can be safely unmounted and replaced by
-a blank one while the scanner remains open. Avoid presenting a card during the
-brief interval when no stick is mounted; the scanner uses a local fallback
-folder during that interval to prevent data loss.
+every confirmed scan. Docker mount propagation keeps those changes visible to
+the running scanner. The old USB stick can be safely ejected and replaced by a
+blank one while the scanner remains open; no application or Jetson restart is
+required. Wait for Ubuntu to finish mounting the new stick before presenting
+the first card. If a card is presented during the brief interval when no stick
+is mounted, the scanner uses a local fallback folder to prevent data loss.
+
+If operators cannot use Ubuntu's eject command, use this physical-swap routine:
+
+1. Remove the card from the camera area.
+2. Wait until the display says `SCANNER READY`.
+3. Pull out the old USB stick.
+4. Insert the blank replacement and wait a few seconds before scanning.
+
+Before returning to `SCANNER READY`, the scanner closes and explicitly flushes
+both the CSV and card image, including the USB directory entry. This minimizes
+the risk from physical removal. Never pull the stick during a scan, countdown,
+or save operation; no software can make removal during an active write safe.
 
 Each CSV row contains four columns in this order:
 
